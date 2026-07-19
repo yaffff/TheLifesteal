@@ -42,6 +42,23 @@ permissions:
     children:
       thelifesteal.craft: true
       thelifesteal.withdraw: true
+      thelifesteal.maxcrafts.*: true
   thelifesteal.craft:
     description: Allows using the custom crafting system
     default: true
+  thelifesteal.maxcrafts.*:
+    description: Allows all custom craft slot limits
+    default: false
+  thelifesteal.maxcrafts.100:
+    description: 100 concurrent crafts (operator tier)
+    default: false
+  thelifesteal.maxcrafts.50:
+    default: false
+  thelifesteal.maxcrafts.25:
+    default: false
+  thelifesteal.maxcrafts.10:
+    default: false
+  thelifesteal.maxcrafts.5:
+    default: false
+  thelifesteal.maxcrafts.1:
+    default: false

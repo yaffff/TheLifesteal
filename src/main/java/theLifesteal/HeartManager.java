@@ -82,6 +82,9 @@ public class HeartManager {
         if (maxHealth == null) return;
 
         double newHealth = maxHealth.getBaseValue() + configManager.getHalfHeartValue();
+        if (newHealth > configManager.getMaxHealthCap()) {
+            newHealth = configManager.getMaxHealthCap();
+        }
         maxHealth.setBaseValue(newHealth);
 
         if (configManager.isHeartUseSoundEnabled()) {
@@ -101,12 +104,14 @@ public class HeartManager {
 
         double currentMax = maxHealth.getBaseValue();
         double newMax = currentMax - configManager.getHeartValue();
-
         if (newMax < configManager.getMinimumMaxHealth()) {
             newMax = configManager.getMinimumMaxHealth();
         }
-
         maxHealth.setBaseValue(newMax);
+        // Cap current health
+        if (player.getHealth() > newMax) {
+            player.setHealth(newMax);
+        }
 
         if (configManager.shouldDropHeartsOnDeath()) {
             ItemStack heartDrop = createHeartItem(1);
@@ -117,6 +122,20 @@ public class HeartManager {
                 configManager.getMessage("heart-dropped")
                         .replace("%amount%", String.valueOf(configManager.getHeartValue()))
         ));
+    }
+
+    public void setMaxHealth(Player player, double amount) {
+        AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+        if (maxHealth == null) return;
+
+        double capped = Math.min(amount, configManager.getMaxHealthCap());
+        capped = Math.max(capped, configManager.getMinimumMaxHealth());
+        maxHealth.setBaseValue(capped);
+
+
+        if (player.getHealth() > maxHealth.getValue()) {
+            player.setHealth(maxHealth.getValue());
+        }
     }
 
     public boolean canWithdrawHearts(Player player, int amount) {
@@ -141,17 +160,6 @@ public class HeartManager {
         if (configManager.isHeartWithdrawSoundEnabled()) {
             player.playSound(player.getLocation(),
                     Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0f, 1.0f);
-        }
-    }
-
-    public void setMaxHealth(Player player, double amount) {
-        AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
-        if (maxHealth == null) return;
-
-        maxHealth.setBaseValue(Math.max(amount, configManager.getMinimumMaxHealth()));
-
-        if (player.getHealth() > maxHealth.getValue()) {
-            player.setHealth(maxHealth.getValue());
         }
     }
 }

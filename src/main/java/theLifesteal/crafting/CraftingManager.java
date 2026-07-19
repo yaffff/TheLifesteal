@@ -6,6 +6,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import theLifesteal.TheLifesteal;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,29 +19,32 @@ public class CraftingManager {
     private final JavaPlugin plugin;
     private final Map<String, CraftingRecipe> recipes;
     private final Map<UUID, List<CraftingProcess>> activeProcesses;
-    private final int maxConcurrentCrafts;
     private File dataFile;
-    private long lastSaveTime;
-    private static final long SAVE_INTERVAL = 30000; // Save every 30 seconds instead of instantly
     private boolean saveScheduled = false;
+    private boolean savingInProgress = false;
 
     public CraftingManager(JavaPlugin plugin) {
         this.plugin = plugin;
         this.recipes = new LinkedHashMap<>();
-        this.activeProcesses = new ConcurrentHashMap<>(); // Thread-safe for async access
-        this.maxConcurrentCrafts = plugin.getConfig().getInt("crafting.max-concurrent-crafts", 5);
+        this.activeProcesses = new ConcurrentHashMap<>();
         this.dataFile = new File(plugin.getDataFolder(), "crafting_data.yml");
-        this.lastSaveTime = System.currentTimeMillis();
-
         registerDefaultRecipes();
         loadCustomRecipes();
-
-        // Periodic cleanup task (runs every 5 minutes)
         startCleanupTask();
     }
 
+    /**
+     * Get the maximum number of concurrent crafts for a player based on permissions.
+     */
+    public int getMaxCrafts(Player player) {
+        return ((TheLifesteal) plugin).getConfigManager().getMaxCraftsForPlayer(player);
+    }
+
+    /**
+     * Periodic cleanup runs on the main thread to avoid concurrency issues.
+     */
     private void startCleanupTask() {
-        plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+        plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             int removed = 0;
             long now = System.currentTimeMillis();
 
@@ -48,8 +52,6 @@ public class CraftingManager {
             while (iterator.hasNext()) {
                 Map.Entry<UUID, List<CraftingProcess>> entry = iterator.next();
                 List<CraftingProcess> processes = entry.getValue();
-
-                // Use iterator to remove while counting
                 Iterator<CraftingProcess> processIterator = processes.iterator();
                 while (processIterator.hasNext()) {
                     CraftingProcess process = processIterator.next();
@@ -58,38 +60,29 @@ public class CraftingManager {
                         removed++;
                     }
                 }
-
-                // Remove empty entries
                 if (processes.isEmpty()) {
                     iterator.remove();
                 }
             }
-
             if (removed > 0) {
                 plugin.getLogger().info("Cleaned up " + removed + " old crafting processes");
                 forceSave();
             }
-        }, 6000L, 6000L); // Run every 5 minutes (6000 ticks = 300 seconds)
+        }, 6000L, 6000L); // every 5 minutes
     }
 
     private void registerDefaultRecipes() {
-        // Only register if recipes are empty (first time setup)
-        if (recipes.isEmpty()) {
-            // Default recipes can go here
-            // These will only load if no recipes exist yet
-        }
+        // placeholder – no default recipes required
     }
 
     private void loadCustomRecipes() {
         File recipesFile = new File(plugin.getDataFolder(), "recipes.yml");
         if (!recipesFile.exists()) {
-            // Don't try to save from jar, just skip loading
             plugin.getLogger().info("No recipes.yml found, skipping custom recipe loading.");
             return;
         }
 
         YamlConfiguration config = YamlConfiguration.loadConfiguration(recipesFile);
-
         for (String key : config.getKeys(false)) {
             try {
                 ItemStack result = config.getItemStack(key + ".result");
@@ -97,7 +90,6 @@ public class CraftingManager {
 
                 Map<Material, Integer> materials = new LinkedHashMap<>();
                 List<String> materialList = config.getStringList(key + ".materials");
-
                 for (String matStr : materialList) {
                     String[] parts = matStr.split(":");
                     if (parts.length == 2) {
@@ -118,38 +110,31 @@ public class CraftingManager {
                 CraftingRecipe recipe = new CraftingRecipe(key, result, materials, time,
                         category, description, shapeless, xp);
                 recipes.put(key, recipe);
-
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to load recipe: " + key + " - " + e.getMessage());
             }
         }
-
         plugin.getLogger().info("Loaded " + recipes.size() + " custom recipes");
     }
 
     public void saveRecipes() {
         File recipesFile = new File(plugin.getDataFolder(), "recipes.yml");
         YamlConfiguration config = new YamlConfiguration();
-
         for (Map.Entry<String, CraftingRecipe> entry : recipes.entrySet()) {
             String key = entry.getKey();
             CraftingRecipe recipe = entry.getValue();
-
             config.set(key + ".result", recipe.getResult());
-
             List<String> materialList = new ArrayList<>();
             for (Map.Entry<Material, Integer> mat : recipe.getMaterials().entrySet()) {
                 materialList.add(mat.getKey().name() + ":" + mat.getValue());
             }
             config.set(key + ".materials", materialList);
-
             config.set(key + ".time", recipe.getCraftingTime());
             config.set(key + ".category", recipe.getCategory());
             config.set(key + ".description", recipe.getDescription());
             config.set(key + ".shapeless", recipe.isShapeless());
             config.set(key + ".xp", recipe.getExperienceReward());
         }
-
         try {
             config.save(recipesFile);
         } catch (IOException e) {
@@ -162,27 +147,22 @@ public class CraftingManager {
         if (recipe == null) return false;
 
         List<CraftingProcess> processes = activeProcesses.computeIfAbsent(
-                player.getUniqueId(), k -> Collections.synchronizedList(new ArrayList<>()));
+                player.getUniqueId(), k -> new ArrayList<>());
 
-        if (processes.size() >= maxConcurrentCrafts) {
-            player.sendMessage("§cYou have reached the maximum concurrent crafts! (" + maxConcurrentCrafts + ")");
+        int max = getMaxCrafts(player);
+        if (processes.size() >= max) {
+            player.sendMessage("§cYou have reached the maximum concurrent crafts! (" + max + ")");
             return false;
         }
 
-        // Check materials efficiently
         if (!hasRequiredMaterials(player, recipe)) {
             return false;
         }
 
-        // Remove materials
         removeMaterials(player, recipe);
-
         CraftingProcess process = new CraftingProcess(player.getUniqueId(), recipe);
         processes.add(process);
-
-        // Schedule async save instead of saving immediately
         scheduleSave();
-
         return true;
     }
 
@@ -190,14 +170,12 @@ public class CraftingManager {
         Map<Material, Integer> required = recipe.getMaterials();
         Map<Material, Integer> available = new HashMap<>();
 
-        // Single pass through inventory
         for (ItemStack item : player.getInventory().getContents()) {
             if (item != null && required.containsKey(item.getType())) {
                 available.merge(item.getType(), item.getAmount(), Integer::sum);
             }
         }
 
-        // Check if we have enough
         for (Map.Entry<Material, Integer> entry : required.entrySet()) {
             if (available.getOrDefault(entry.getKey(), 0) < entry.getValue()) {
                 player.sendMessage("§cMissing: " + formatMaterialName(entry.getKey()) +
@@ -205,7 +183,6 @@ public class CraftingManager {
                 return false;
             }
         }
-
         return true;
     }
 
@@ -217,9 +194,8 @@ public class CraftingManager {
     }
 
     public boolean cancelCrafting(Player player, int processIndex) {
-        List<CraftingProcess> processes = getPlayerProcesses(player.getUniqueId());
-
-        if (processIndex >= processes.size() || processIndex < 0) {
+        List<CraftingProcess> processes = activeProcesses.get(player.getUniqueId());
+        if (processes == null || processIndex < 0 || processIndex >= processes.size()) {
             return false;
         }
 
@@ -228,13 +204,11 @@ public class CraftingManager {
             return false;
         }
 
-        // Return materials
+        // Refund materials
         Map<Material, Integer> materials = process.getRecipe().getMaterials();
         for (Map.Entry<Material, Integer> entry : materials.entrySet()) {
             ItemStack refund = new ItemStack(entry.getKey(), entry.getValue());
             Map<Integer, ItemStack> leftover = player.getInventory().addItem(refund);
-
-            // Drop items that don't fit in inventory
             for (ItemStack item : leftover.values()) {
                 player.getWorld().dropItemNaturally(player.getLocation(), item);
             }
@@ -244,15 +218,13 @@ public class CraftingManager {
         if (processes.isEmpty()) {
             activeProcesses.remove(player.getUniqueId());
         }
-
         scheduleSave();
         return true;
     }
 
     public boolean claimItem(Player player, int processIndex) {
-        List<CraftingProcess> processes = getPlayerProcesses(player.getUniqueId());
-
-        if (processIndex >= processes.size() || processIndex < 0) {
+        List<CraftingProcess> processes = activeProcesses.get(player.getUniqueId());
+        if (processes == null || processIndex < 0 || processIndex >= processes.size()) {
             return false;
         }
 
@@ -261,7 +233,6 @@ public class CraftingManager {
             player.sendMessage("§cThis item is not ready yet!");
             return false;
         }
-
         if (process.isClaimed()) {
             player.sendMessage("§cThis item has already been claimed!");
             return false;
@@ -277,8 +248,6 @@ public class CraftingManager {
 
         process.setClaimed(true);
         player.giveExp(process.getRecipe().getExperienceReward());
-
-        // Play a nice sound
         player.playSound(player.getLocation(),
                 org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.5f);
 
@@ -287,62 +256,48 @@ public class CraftingManager {
     }
 
     /**
-     * Schedules a save instead of saving immediately
-     * Prevents I/O spam when many players craft at once
+     * Schedule a save after a short delay to batch multiple changes.
      */
     private void scheduleSave() {
-        if (saveScheduled) {
-            return; // Already scheduled
-        }
-
+        if (saveScheduled) return;
         saveScheduled = true;
-
-        // Save after a short delay to batch multiple changes
         plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            saveCraftingProcesses();
             saveScheduled = false;
-        }, 40L); // 2 second delay
+            saveCraftingProcesses();
+        }, 40L); // 2 seconds
     }
 
     public void saveCraftingProcesses() {
-        // Don't save if nothing changed recently (optional optimization)
-        if (System.currentTimeMillis() - lastSaveTime < 5000 && lastSaveTime > 0) {
-            return;
-        }
-
-        YamlConfiguration config = new YamlConfiguration();
-
-        for (Map.Entry<UUID, List<CraftingProcess>> entry : activeProcesses.entrySet()) {
-            List<CraftingProcess> processes = entry.getValue();
-            if (processes.isEmpty()) continue;
-
-            List<Map<String, Object>> processList = new ArrayList<>(processes.size());
-
-            for (CraftingProcess process : processes) {
-                // Skip already claimed processes older than 10 minutes
-                if (process.isClaimed() &&
-                        System.currentTimeMillis() - process.getEndTime() > 600000) {
-                    continue;
-                }
-
-                Map<String, Object> processData = new HashMap<>(4);
-                processData.put("recipeId", process.getRecipe().getId());
-                processData.put("startTime", process.getStartTime());
-                processData.put("endTime", process.getEndTime());
-                processData.put("claimed", process.isClaimed());
-                processList.add(processData);
-            }
-
-            if (!processList.isEmpty()) {
-                config.set(entry.getKey().toString(), processList);
-            }
-        }
-
+        if (savingInProgress) return;
+        savingInProgress = true;
         try {
+            YamlConfiguration config = new YamlConfiguration();
+            for (Map.Entry<UUID, List<CraftingProcess>> entry : activeProcesses.entrySet()) {
+                List<CraftingProcess> processes = entry.getValue();
+                if (processes.isEmpty()) continue;
+
+                List<Map<String, Object>> processList = new ArrayList<>();
+                for (CraftingProcess process : processes) {
+                    // Don't save claimed processes older than 10 minutes
+                    if (process.isClaimed() && System.currentTimeMillis() - process.getEndTime() > 600000) {
+                        continue;
+                    }
+                    Map<String, Object> data = new HashMap<>();
+                    data.put("recipeId", process.getRecipe().getId());
+                    data.put("startTime", process.getStartTime());
+                    data.put("endTime", process.getEndTime());
+                    data.put("claimed", process.isClaimed());
+                    processList.add(data);
+                }
+                if (!processList.isEmpty()) {
+                    config.set(entry.getKey().toString(), processList);
+                }
+            }
             config.save(dataFile);
-            lastSaveTime = System.currentTimeMillis();
         } catch (IOException e) {
             plugin.getLogger().warning("Failed to save crafting processes: " + e.getMessage());
+        } finally {
+            savingInProgress = false;
         }
     }
 
@@ -357,66 +312,50 @@ public class CraftingManager {
             try {
                 UUID uuid = UUID.fromString(uuidStr);
                 List<Map<String, Object>> processList = (List<Map<String, Object>>) config.getList(uuidStr);
+                if (processList == null) continue;
 
-                if (processList != null) {
-                    List<CraftingProcess> processes = Collections.synchronizedList(new ArrayList<>());
+                List<CraftingProcess> processes = new ArrayList<>();
+                for (Map<String, Object> data : processList) {
+                    String recipeId = (String) data.get("recipeId");
+                    CraftingRecipe recipe = recipes.get(recipeId);
+                    if (recipe == null) continue;
 
-                    for (Map<String, Object> data : processList) {
-                        String recipeId = (String) data.get("recipeId");
-                        CraftingRecipe recipe = recipes.get(recipeId);
+                    long startTime = ((Number) data.get("startTime")).longValue();
+                    long endTime = ((Number) data.get("endTime")).longValue();
+                    boolean claimed = (Boolean) data.get("claimed");
 
-                        if (recipe != null) {
-                            long startTime = ((Number) data.get("startTime")).longValue();
-                            long endTime = ((Number) data.get("endTime")).longValue();
-                            boolean claimed = (Boolean) data.get("claimed");
+                    // Skip very old claimed processes
+                    if (claimed && (now - endTime) > 1800000) continue;
 
-                            // Don't load claimed processes older than 30 minutes
-                            if (claimed && (now - endTime) > 1800000) {
-                                continue;
-                            }
-
-                            CraftingProcess process = new CraftingProcess(uuid, recipe, startTime, endTime);
-                            if (claimed) {
-                                process.setClaimed(true);
-                            }
-                            processes.add(process);
-                            loaded++;
-                        }
-                    }
-
-                    if (!processes.isEmpty()) {
-                        activeProcesses.put(uuid, processes);
-                    }
+                    CraftingProcess process = new CraftingProcess(uuid, recipe, startTime, endTime);
+                    if (claimed) process.setClaimed(true);
+                    processes.add(process);
+                    loaded++;
+                }
+                if (!processes.isEmpty()) {
+                    activeProcesses.put(uuid, processes);
                 }
             } catch (IllegalArgumentException e) {
                 plugin.getLogger().warning("Invalid UUID in crafting data: " + uuidStr);
             }
         }
-
         plugin.getLogger().info("Loaded " + loaded + " crafting processes from disk");
     }
 
     /**
-     * Force save - call this on plugin disable
+     * Force save (used on plugin disable).
      */
     public void forceSave() {
         saveScheduled = false;
         saveCraftingProcesses();
     }
 
-    // Thread-safe getter for player processes
-    public List<CraftingProcess> getPlayerProcesses(UUID playerUUID) {
-        return activeProcesses.getOrDefault(playerUUID, Collections.emptyList());
-    }
-
     /**
-     * Gets total number of active processes across all players
-     * Useful for monitoring
+     * Returns a snapshot of the player's active processes (main‑thread safe).
      */
-    public int getTotalActiveProcesses() {
-        return activeProcesses.values().stream()
-                .mapToInt(List::size)
-                .sum();
+    public List<CraftingProcess> getPlayerProcesses(UUID playerUUID) {
+        List<CraftingProcess> processes = activeProcesses.get(playerUUID);
+        return processes != null ? new ArrayList<>(processes) : Collections.emptyList();
     }
 
     public void registerRecipe(CraftingRecipe recipe) {
@@ -453,5 +392,4 @@ public class CraftingManager {
     private String formatMaterialName(Material material) {
         return material.name().replace("_", " ").toLowerCase();
     }
-
 }

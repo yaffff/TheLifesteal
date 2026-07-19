@@ -129,24 +129,20 @@ public class RecipeBookListener implements Listener {
             craftingGUI.openMainMenu(event.getPlayer());
         }
     }
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        deathBooks.remove(event.getPlayer());
+    }
+
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         String title = event.getView().getTitle();
 
+
         // Crafting GUIs (including editor sub-menus) are handled first
         if (isCraftingGUI(title)) {
-            // Special allowance for Recipe Editor item slots
-            if (title.contains("Recipe Editor")) {
-                int slot = event.getSlot();
-                if (slot == 4 || (slot >= 19 && slot <= 43)) {
-                    event.setCancelled(false);
-                    Bukkit.getScheduler().runTaskLater(plugin, () ->
-                            craftingGUI.getAdminGUI().syncEditorFromInventory(player, event.getInventory()), 1L);
-                    return;
-                }
-            }
             event.setCancelled(true);
             craftingGUI.handleClick(player, title, event.getSlot(), event.getClick());
             return;
@@ -159,7 +155,16 @@ public class RecipeBookListener implements Listener {
 
         if (recipeBookItem.isRecipeBook(current) || recipeBookItem.isRecipeBook(cursor)) {
             event.setCancelled(true);
-            if (event.getSlot() == bookSlot && event.getClick() == ClickType.RIGHT) {
+            if (event.getClick() == ClickType.RIGHT) {
+                craftingGUI.openMainMenu(player);
+            }
+            return;
+        }
+
+
+        if (recipeBookItem.isRecipeBook(current) || recipeBookItem.isRecipeBook(cursor)) {
+            event.setCancelled(true);
+            if (event.getClick() == ClickType.RIGHT) {
                 craftingGUI.openMainMenu(player);
             }
             return;
@@ -210,7 +215,10 @@ public class RecipeBookListener implements Listener {
                 title.contains("Active Crafts") ||
                 title.contains("Admin Crafting") ||
                 title.contains("Recipe Editor") ||
-                title.contains("Custom Items");
+                title.contains("Custom Items") ||
+                title.contains("Set Crafting Time") ||
+                title.contains("Set XP Reward") ||
+                title.contains("Set Amount for");
     }
 
     private void giveRecipeBook(Player player) {

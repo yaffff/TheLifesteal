@@ -150,6 +150,11 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        // Cap at max health
+        if (amount > configManager.getMaxHealthCap()) {
+            amount = configManager.getMaxHealthCap();
+            sender.sendMessage(ColorUtils.colorize("&cValue capped at server maximum: " + configManager.getMaxHealthCap()));
+        }
         if (amount < configManager.getMinimumMaxHealth()) {
             sender.sendMessage(ColorUtils.colorize(configManager.getMessage("min-health-reached")));
             return true;
@@ -168,7 +173,6 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
                             .replace("%amount%", String.valueOf(amount))
             ));
         }
-
         return true;
     }
 

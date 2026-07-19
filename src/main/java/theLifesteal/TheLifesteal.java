@@ -1,6 +1,10 @@
 package theLifesteal;
 
+import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import theLifesteal.crafting.*;
 import java.util.logging.Level;
@@ -33,14 +37,12 @@ public final class TheLifesteal extends JavaPlugin {
         try {
             saveResource("recipes.yml", false);
         } catch (IllegalArgumentException e) {
-            // File doesn't exist in jar, that's fine
             getLogger().info("No default recipes.yml found, will create when needed.");
         }
 
         try {
             saveResource("custom_items.yml", false);
         } catch (IllegalArgumentException e) {
-            // File doesn't exist in jar, that's fine
             getLogger().info("No default custom_items.yml found, will create when needed.");
         }
 
@@ -62,7 +64,6 @@ public final class TheLifesteal extends JavaPlugin {
 
         // Register commands with tab completion
         this.commandHandler = new CommandHandler(this, recipeBookItem, craftingGUI);
-
         registerCommands();
 
         // Register custom recipes from config
@@ -71,6 +72,24 @@ public final class TheLifesteal extends JavaPlugin {
 
         // Load saved crafting processes
         craftingManager.loadCraftingProcesses();
+
+        // Player quit cleanup
+        getServer().getPluginManager().registerEvents(new Listener() {
+            @EventHandler
+            public void onQuit(PlayerQuitEvent event) {
+                java.util.UUID uuid = event.getPlayer().getUniqueId();
+                // Clear GUI data
+                if (craftingGUI != null) {
+                    craftingGUI.removePlayer(uuid);
+                }
+                // Clear admin editor sessions
+                if (craftingGUI != null && craftingGUI.getAdminGUI() != null) {
+                    craftingGUI.getAdminGUI().cleanupPlayer(uuid);
+                }
+                // Also clear any recipe book death cache if needed (the recipe book listener does its own cleanup,
+                // but we can also clear here just in case)
+            }
+        }, this);
 
         getLogger().log(Level.INFO, "§c❤ §aLifesteal Plugin v2.0 enabled for 1.21.11! §c❤");
         getLogger().log(Level.INFO, "§6⚒ §eCustom Crafting System loaded! §6⚒");
@@ -82,7 +101,7 @@ public final class TheLifesteal extends JavaPlugin {
 
         this.recipeBookItem = new RecipeBookItem(bookKey, getConfig());
         this.craftingManager = new CraftingManager(this);
-        this.craftingGUI = new CraftingGUI(this, craftingManager, getConfig(), customItemManager); // Pass 'this'
+        this.craftingGUI = new CraftingGUI(this, craftingManager, getConfig(), customItemManager);
         this.recipeBookListener = new RecipeBookListener(this, recipeBookItem, craftingGUI, craftingManager);
 
         getServer().getPluginManager().registerEvents(recipeBookListener, this);

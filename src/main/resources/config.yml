@@ -1,6 +1,13 @@
 # The Lifesteal Plugin Configuration
 
 settings:
+  # Maximum max health a player can have (default: 40.0 = 20 hearts)
+  max-health-cap: 40.0
+
+  # Maximum concurrent crafts per player (permission-based override)
+  max-crafts:
+    default: 5
+    op: 100
   # How many HP points each heart is worth (default: 2.0 = 1 full heart)
   heart-value: 2.0
 
@@ -35,6 +42,9 @@ messages:
   health-set: "&aSet &e%player%&a's max HP to &c%amount%&a!"
   health-set-self: "&aYour max HP has been set to &c%amount%&a!"
   lifesteal-broadcast: "&c%killer% &7stole a heart from &c%victim%&7!"
+
+
+
 
 items:
   half-heart:
