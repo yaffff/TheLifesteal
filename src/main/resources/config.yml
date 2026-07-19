@@ -1,0 +1,145 @@
+# The Lifesteal Plugin Configuration
+
+settings:
+  # How many HP points each heart is worth (default: 2.0 = 1 full heart)
+  heart-value: 2.0
+
+  # Minimum max health a player can have (default: 6.0 = 3 hearts)
+  minimum-max-health: 6.0
+
+  # How many HP points each half-heart item restores (default: 1.0)
+  half-heart-value: 1.0
+
+  # Should players drop hearts on death?
+  drop-hearts-on-death: true
+
+  # Broadcast lifesteal events to all players
+  broadcast-lifesteal: true
+
+  # Sound effects
+  sounds:
+    heart-use: true
+    heart-withdraw: true
+
+messages:
+  prefix: "&8[&c❤&8] &r"
+  heart-gained: "&aYou gained &c%amount% &amax HP point(s)!"
+  heart-withdrawn: "&aSuccessfully withdrew &c%amount% &aHP point(s)!"
+  heart-dropped: "&cYou lost &4%amount% &cmax HP points upon death!"
+  inventory-full: "&cYour inventory is full!"
+  invalid-amount: "&cPlease enter a valid positive number!"
+  min-health-reached: "&cYou've reached the minimum health limit!"
+  player-only: "&cOnly players can use this command!"
+  no-permission: "&cYou don't have permission to do this!"
+  player-not-found: "&cPlayer not found!"
+  health-set: "&aSet &e%player%&a's max HP to &c%amount%&a!"
+  health-set-self: "&aYour max HP has been set to &c%amount%&a!"
+  lifesteal-broadcast: "&c%killer% &7stole a heart from &c%victim%&7!"
+
+items:
+  half-heart:
+    material: RED_DYE
+    name: "&c❤ &4Half a Heart &c❤"
+    lore:
+      - "&7Right-click to restore"
+      - "&71 max HP point"
+      - ""
+      - "&c❤ &8Lifesteal Item &c❤"
+    glow: true
+    custom-model-data: 0
+
+# Recipe Book Configuration
+recipe-book:
+  # Which inventory slot should the recipe book occupy? (0-35 for main inventory, 36-44 for hotbar)
+  # Default: 8 (hotbar slot 9, far right)
+  slot: 8
+
+  # Should the recipe book be given to players on join?
+  give-on-join: true
+
+  # Should the recipe book be given back on respawn?
+  give-on-respawn: true
+
+  # Recipe Book Item Settings
+  item:
+    material: KNOWLEDGE_BOOK
+    name: "&6✦ &e&lCrafting Recipe Book &6✦"
+    lore:
+      - "&7&m-------------------"
+      - "&e▶ Right-click to open"
+      - "&e  the custom crafting menu"
+      - ""
+      - "&7• View all custom recipes"
+      - "&7• Start crafting powerful items"
+      - "&7• Track your crafting progress"
+      - "&7&m-------------------"
+      - "&6⚒ &eSoulbound Item &6⚒"
+    glow: true
+    custom-model-data: 0
+
+# Crafting System Configuration
+crafting:
+  # Maximum concurrent crafts per player
+  max-concurrent-crafts: 5
+
+  # How often to check for completed crafts (in seconds)
+  check-interval: 5
+
+  # Auto-remove claimed items after this many seconds
+  auto-remove-claimed: 30
+
+  # GUI Settings
+  gui:
+    title: "&6✦ &e&lCustom Crafting Menu &6✦"
+    details-title: "&6✦ &eRecipe Details &6✦"
+    active-title: "&6✦ &eActive Crafts &6✦"
+
+    # Navigation Buttons
+    buttons:
+      previous-page:
+        material: ARROW
+        name: "&a← Previous Page"
+        lore:
+          - "&7Click to go back"
+      next-page:
+        material: ARROW
+        name: "&aNext Page →"
+        lore:
+          - "&7Click for more recipes"
+      close-menu:
+        material: BARRIER
+        name: "&c✖ Close Menu"
+        lore:
+          - "&7Click to close"
+      active-crafts:
+        material: CRAFTING_TABLE
+        name: "&6⚒ Active Crafts: &e%count%"
+        lore:
+          - "&7Click to view your"
+          - "&7crafting queue"
+      category-filter:
+        material: BOOK
+        name: "&dCategory: &f%category%"
+        lore:
+          - "&7Click to change category"
+      back-button:
+        material: ARROW
+        name: "&a← Back to Recipes"
+        lore:
+          - "&7Return to recipe list"
+      start-crafting:
+        material: EMERALD_BLOCK
+        name: "&a✦ &6&lStart Crafting &a✦"
+        lore:
+          - "&7&m-------------------"
+          - "&e▶ Click to begin crafting!"
+          - "&e▶ Time: &f%time%"
+          - ""
+          - "&7Materials will be consumed"
+          - "&7upon starting the craft."
+          - "&7&m-------------------"
+
+    # Background filler
+    filler:
+      material: BLACK_STAINED_GLASS_PANE
+      name: " "

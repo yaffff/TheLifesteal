@@ -1,0 +1,47 @@
+name: TheLifesteal
+version: 2.0.0
+main: theLifesteal.TheLifesteal
+api-version: 1.21
+description: A modern lifesteal plugin with custom crafting system
+author: _Ysf
+
+commands:
+  withdrawhearts:
+    description: Withdraw hearts from your health pool
+    usage: /<command> <amount>
+    aliases: [withdraw, wh]
+    permission: thelifesteal.withdraw
+  setmaxhp:
+    description: Set a player's maximum health
+    usage: /<command> [player] <amount>
+    aliases: [sethealth, shp]
+    permission: thelifesteal.admin
+  craft:
+    description: Open the custom crafting menu
+    usage: /<command>
+    aliases: [crafting, recipes, craftmenu]
+    permission: thelifesteal.craft
+  recipebook:
+    description: Get a new recipe book if yours is lost
+    usage: /<command> [player]
+    aliases: [getbook, book]
+    permission: thelifesteal.admin
+  customitems:
+    description: Open the custom items admin menu
+    usage: /<command>
+    aliases: [ci, items, citems]
+    permission: thelifesteal.admin
+
+permissions:
+  thelifesteal.withdraw:
+    description: Allows players to withdraw hearts
+    default: true
+  thelifesteal.admin:
+    description: Allows admins to manage everything
+    default: op
+    children:
+      thelifesteal.craft: true
+      thelifesteal.withdraw: true
+  thelifesteal.craft:
+    description: Allows using the custom crafting system
+    default: true
