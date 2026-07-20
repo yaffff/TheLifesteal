@@ -10,6 +10,7 @@ import theLifesteal.crafting.*;
 import theLifesteal.customitem.AdvancedCustomItemManager;
 import theLifesteal.customitem.CustomItemGUI;
 import theLifesteal.customitem.CustomItemListener;
+import theLifesteal.customitem.CustomItemRestrictionListener;
 
 import java.util.UUID;
 import java.util.logging.Level;
@@ -67,6 +68,8 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         this.customItemGUI = new CustomItemGUI(this, advancedItemManager);
         this.customItemListener = new CustomItemListener(this, customItemGUI);
         getServer().getPluginManager().registerEvents(customItemListener, this);
+        getServer().getPluginManager().registerEvents(new CustomItemRestrictionListener(this), this);
+
 
         getLogger().info("§a✓ Advanced Custom Item System initialized");
 
@@ -148,10 +151,10 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
             getCommand("recipebook").setExecutor(commandHandler);
             getCommand("recipebook").setTabCompleter(commandHandler);
         }
-        if (getCommand("customitems") != null) {
-            getCommand("customitems").setExecutor(commandHandler);
-            getCommand("customitems").setTabCompleter(commandHandler);
-
+        // FIXED: use "customitem" (matches plugin.yml)
+        if (getCommand("customitem") != null) {
+            getCommand("customitem").setExecutor(commandHandler);
+            getCommand("customitem").setTabCompleter(commandHandler);
         }
     }
     @EventHandler

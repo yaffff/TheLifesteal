@@ -1,6 +1,5 @@
 package theLifesteal.crafting;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -35,7 +34,6 @@ public class RecipeBookListener implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-
         if (recipeBookItem.giveOnJoin()) {
             boolean hasBook = false;
             for (ItemStack item : player.getInventory().getContents()) {
@@ -47,21 +45,16 @@ public class RecipeBookListener implements Listener {
                     break;
                 }
             }
-
-            if (!hasBook) {
-                giveRecipeBook(player);
-            }
+            if (!hasBook) giveRecipeBook(player);
         }
     }
 
     @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
-
         if (recipeBookItem.giveOnRespawn()) {
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 ItemStack savedBook = deathBooks.remove(player);
-
                 boolean hasBook = false;
                 for (ItemStack item : player.getInventory().getContents()) {
                     if (recipeBookItem.isRecipeBook(item)) {
@@ -69,13 +62,9 @@ public class RecipeBookListener implements Listener {
                         break;
                     }
                 }
-
                 if (!hasBook) {
-                    if (savedBook != null) {
-                        player.getInventory().setItem(recipeBookItem.getSlot(), savedBook);
-                    } else {
-                        giveRecipeBook(player);
-                    }
+                    if (savedBook != null) player.getInventory().setItem(recipeBookItem.getSlot(), savedBook);
+                    else giveRecipeBook(player);
                 }
             }, 5L);
         }
@@ -84,8 +73,6 @@ public class RecipeBookListener implements Listener {
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();
-
-        // Find and remove recipe book from drops
         event.getDrops().removeIf(item -> {
             if (recipeBookItem.isRecipeBook(item)) {
                 deathBooks.put(player, item.clone());
@@ -93,14 +80,10 @@ public class RecipeBookListener implements Listener {
             }
             return false;
         });
-
-        // Also remove from player's inventory to prevent duplication
         ItemStack[] contents = player.getInventory().getContents();
         for (int i = 0; i < contents.length; i++) {
             if (recipeBookItem.isRecipeBook(contents[i])) {
-                if (!deathBooks.containsKey(player)) {
-                    deathBooks.put(player, contents[i].clone());
-                }
+                if (!deathBooks.containsKey(player)) deathBooks.put(player, contents[i].clone());
                 contents[i] = null;
             }
         }
@@ -117,11 +100,7 @@ public class RecipeBookListener implements Listener {
 
     @EventHandler
     public void onRightClick(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR &&
-                event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         ItemStack item = event.getItem();
         if (item != null && recipeBookItem.isRecipeBook(item)) {
             event.setCancelled(true);
@@ -134,38 +113,37 @@ public class RecipeBookListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         String title = event.getView().getTitle();
 
-        // ---- FIX 1: Recipe Editor handling ----
+        // ===== EXCLUDE ADVANCED CUSTOM ITEM GUI TITLES =====
+        if (title.contains("Item Creator") || title.contains("Edit Item") ||
+                title.contains("Attributes") || title.contains("Name & Lore") ||
+                title.contains("Flags") || title.contains("Choose Base") ||
+                title.contains("Coming Soon")) {
+            return; // let CustomItemListener handle these
+        }
+
+        // ---- Recipe Editor handling ----
         if (title.contains("Recipe Editor")) {
-            // Allow clicks in the player's own inventory (bottom)
             if (event.getClickedInventory() != null &&
                     event.getClickedInventory().equals(event.getView().getBottomInventory())) {
-                // Let normal inventory actions happen (pick up, place, etc.)
                 event.setCancelled(false);
                 return;
             }
-
-            // Top inventory (the editor) – we handle clicks ourselves
             event.setCancelled(true);
             craftingGUI.getAdminGUI().handleEditorClick(
-                    player,
-                    event.getSlot(),
-                    event.getClick(),
-                    event.getCursor(),
-                    event.getCurrentItem()
+                    player, event.getSlot(), event.getClick(),
+                    event.getCursor(), event.getCurrentItem()
             );
             return;
         }
 
-        // ---- Other crafting GUIs (main menu, details, active, admin) ----
+        // ---- Other crafting GUIs (main, details, active, admin) ----
         if (isCraftingGUI(title)) {
-            // We still want to block bottom clicks in these other GUIs to prevent item stealing
-            // But we allow the top inventory clicks to be handled by CraftingGUI
             event.setCancelled(true);
             craftingGUI.handleClick(player, title, event.getSlot(), event.getClick());
             return;
         }
 
-        // ---- Recipe book protection (unchanged) ----
+        // ---- Recipe book protection ----
         int bookSlot = recipeBookItem.getSlot();
         ItemStack current = event.getCurrentItem();
         ItemStack cursor = event.getCursor();
@@ -177,12 +155,10 @@ public class RecipeBookListener implements Listener {
             }
             return;
         }
-
         if (event.isShiftClick() && recipeBookItem.isRecipeBook(current)) {
             event.setCancelled(true);
             return;
         }
-
         if (event.getHotbarButton() != -1) {
             ItemStack hotbarItem = player.getInventory().getItem(event.getHotbarButton());
             if (recipeBookItem.isRecipeBook(hotbarItem) ||
@@ -196,22 +172,17 @@ public class RecipeBookListener implements Listener {
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
-
         String title = event.getView().getTitle();
-
-        // Cancel all drags in crafting GUIs
-        if (isCraftingGUI(title)) {
+        if (isCraftingGUI(title) || title.contains("Item Creator") || title.contains("Edit Item") ||
+                title.contains("Attributes") || title.contains("Name & Lore") || title.contains("Flags") ||
+                title.contains("Choose Base") || title.contains("Coming Soon")) {
             event.setCancelled(true);
             return;
         }
-
-        // Prevent dragging recipe book
         int bookSlot = recipeBookItem.getSlot();
         if (event.getInventorySlots().contains(bookSlot)) {
             ItemStack bookSlotItem = player.getInventory().getItem(bookSlot);
-            if (recipeBookItem.isRecipeBook(bookSlotItem)) {
-                event.setCancelled(true);
-            }
+            if (recipeBookItem.isRecipeBook(bookSlotItem)) event.setCancelled(true);
         }
     }
 
@@ -221,20 +192,16 @@ public class RecipeBookListener implements Listener {
                 title.contains("Active Crafts") ||
                 title.contains("Admin Crafting") ||
                 title.contains("Recipe Editor") ||
-                title.contains("Custom Items") ||
-                title.contains("Set Crafting Time") ||  // sub-editors
+                title.contains("Set Crafting Time") ||
                 title.contains("Set XP Reward") ||
                 title.contains("Set Amount for");
     }
 
     private void giveRecipeBook(Player player) {
         int bookSlot = recipeBookItem.getSlot();
-
         ItemStack slotItem = player.getInventory().getItem(bookSlot);
         if (slotItem != null && slotItem.getType() != Material.AIR) {
-            if (recipeBookItem.isRecipeBook(slotItem)) {
-                return;
-            }
+            if (recipeBookItem.isRecipeBook(slotItem)) return;
             HashMap<Integer, ItemStack> leftover = player.getInventory().addItem(slotItem.clone());
             if (!leftover.isEmpty()) {
                 player.sendMessage(ColorUtils.colorize("&cCould not give Recipe Book - inventory full!"));
@@ -242,13 +209,11 @@ public class RecipeBookListener implements Listener {
             }
             player.getInventory().setItem(bookSlot, null);
         }
-
         player.getInventory().setItem(bookSlot, recipeBookItem.createRecipeBook());
     }
 
     private void moveToCorrectSlot(Player player) {
         int bookSlot = recipeBookItem.getSlot();
-
         for (int i = 0; i < player.getInventory().getSize(); i++) {
             ItemStack item = player.getInventory().getItem(i);
             if (recipeBookItem.isRecipeBook(item)) {

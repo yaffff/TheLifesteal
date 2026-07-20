@@ -64,6 +64,15 @@ public class AdvancedCustomItemManager {
                 }
 
                 List<String> flagNames = itemSection.getStringList("flags");
+                if (flagNames != null && !flagNames.isEmpty()) {
+                    EnumSet<CustomItemFlag> flags = EnumSet.noneOf(CustomItemFlag.class);
+                    for (String flagName : flagNames) {
+                        try {
+                            flags.add(CustomItemFlag.valueOf(flagName));
+                        } catch (IllegalArgumentException ignored) {}
+                    }
+                    item.setFlags(flags);
+                }
                 for (String flagName : flagNames) {
                     try { item.getFlags().add(CustomItemFlag.valueOf(flagName)); } catch (IllegalArgumentException ignored) {}
                 }
@@ -194,9 +203,10 @@ public class AdvancedCustomItemManager {
         if (item.hasFlag(CustomItemFlag.HIDE_ARMOR_TRIM)) meta.addItemFlags(ItemFlag.HIDE_ARMOR_TRIM);
 
         // Attributes
+
         for (Map.Entry<Attribute, Double> entry : item.getAttributes().entrySet()) {
             AttributeModifier modifier = new AttributeModifier(
-                    UUID.randomUUID(),
+                    UUID.nameUUIDFromBytes(("custom_attr:" + entry.getKey().name()).getBytes()),
                     "custom_mod",
                     entry.getValue(),
                     AttributeModifier.Operation.ADD_NUMBER
