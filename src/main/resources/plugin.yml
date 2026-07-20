@@ -26,11 +26,11 @@ commands:
     usage: /<command> [player]
     aliases: [getbook, book]
     permission: thelifesteal.admin
-  customitems:
-    description: Open the custom items admin menu
-    usage: /<command>
-    aliases: [ci, items, citems]
-    permission: thelifesteal.admin
+  customitem:
+      description: Open the advanced custom item creation GUI
+      usage: /<command>
+      aliases: [ ci, customitems, citem ]
+      permission: thelifesteal.admin
 
 permissions:
   thelifesteal.withdraw:

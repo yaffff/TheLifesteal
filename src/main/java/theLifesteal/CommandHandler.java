@@ -44,11 +44,27 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
                 return handleCraftCommand(sender, args);
             case "recipebook":
                 return handleRecipeBookCommand(sender, args);
-            case "customitems":
-                return handleCustomItemsCommand(sender, args);
-            default:
-                return false;
+            case "customitem":
+                return handleCustomItemCommand(sender, args);
+            case "ci":
+                return handleCustomItemCommand(sender, args);
         }
+        return false;
+    }
+    private boolean handleCustomItemCommand(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(ColorUtils.colorize(configManager.getMessage("player-only")));
+            return true;
+        }
+
+        if (!player.hasPermission("thelifesteal.admin")) {
+            player.sendMessage(ColorUtils.colorize(configManager.getMessage("no-permission")));
+            return true;
+        }
+
+        // Open the custom item GUI
+        plugin.getCustomItemGUI().openMainMenu(player);
+        return true;
     }
 
     private boolean handleWithdrawCommand(CommandSender sender, String[] args) {
@@ -222,22 +238,6 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    private boolean handleCustomItemsCommand(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("thelifesteal.admin")) {
-            sender.sendMessage(ColorUtils.colorize(configManager.getMessage("no-permission")));
-            return true;
-        }
-
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage(ColorUtils.colorize(configManager.getMessage("player-only")));
-            return true;
-        }
-
-        // Access admin GUI through crafting GUI
-        craftingGUI.getAdminGUI().openCustomItemsMenu(player);
-        return true;
-    }
-
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                 @NotNull String alias, @NotNull String[] args) {
@@ -277,6 +277,9 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
 
             case "craft":
             case "customitems":
+                break;
+            case "customitem":
+            case "ci":
                 break;
         }
 

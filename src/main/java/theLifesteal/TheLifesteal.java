@@ -7,6 +7,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import theLifesteal.crafting.*;
+import theLifesteal.customitem.AdvancedCustomItemManager;
+import theLifesteal.customitem.CustomItemGUI;
+import theLifesteal.customitem.CustomItemListener;
 
 import java.util.UUID;
 import java.util.logging.Level;
@@ -27,6 +30,11 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
     private CraftingGUI craftingGUI;
     private RecipeBookListener recipeBookListener;
     private CustomItemManager customItemManager;
+
+    // Custom Item System
+    private AdvancedCustomItemManager advancedItemManager;
+    private CustomItemGUI customItemGUI;
+    private CustomItemListener customItemListener;
 
     @Override
     public void onEnable() {
@@ -54,6 +62,13 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
 
         // Initialize custom item manager
         this.customItemManager = new CustomItemManager(this);
+        // Initialize advanced custom item system
+        this.advancedItemManager = new AdvancedCustomItemManager(this);
+        this.customItemGUI = new CustomItemGUI(this, advancedItemManager);
+        this.customItemListener = new CustomItemListener(this, customItemGUI);
+        getServer().getPluginManager().registerEvents(customItemListener, this);
+
+        getLogger().info("§a✓ Advanced Custom Item System initialized");
 
         // Register listeners
         this.deathListener = new DeathListener(this);
@@ -136,6 +151,7 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         if (getCommand("customitems") != null) {
             getCommand("customitems").setExecutor(commandHandler);
             getCommand("customitems").setTabCompleter(commandHandler);
+
         }
     }
     @EventHandler
@@ -146,7 +162,18 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
             if (craftingGUI.getAdminGUI() != null) {
                 craftingGUI.getAdminGUI().cleanupPlayer(uuid);
             }
+
         }
+        if (customItemGUI != null) {
+            customItemGUI.cleanupPlayer(uuid);
+        }
+    }
+    public AdvancedCustomItemManager getAdvancedItemManager() {
+        return advancedItemManager;
+    }
+
+    public CustomItemGUI getCustomItemGUI() {
+        return customItemGUI;
     }
 
     @Override
@@ -154,6 +181,11 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         // Save all active crafting processes before shutdown
         if (craftingManager != null) {
             craftingManager.forceSave();
+
+        }
+        // Save custom items
+        if (advancedItemManager != null) {
+            advancedItemManager.saveItems();
         }
 
         getLogger().log(Level.INFO, "§c❤ §eLifesteal Plugin disabled. Goodbye! §c❤");
