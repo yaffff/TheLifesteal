@@ -7,9 +7,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import theLifesteal.crafting.*;
+
+import java.util.UUID;
 import java.util.logging.Level;
 
-public final class TheLifesteal extends JavaPlugin {
+public final class TheLifesteal extends JavaPlugin implements Listener {
 
     private static TheLifesteal instance;
     private ConfigManager configManager;
@@ -58,6 +60,7 @@ public final class TheLifesteal extends JavaPlugin {
         this.heartUseListener = new HeartUseListener(this);
         getServer().getPluginManager().registerEvents(deathListener, this);
         getServer().getPluginManager().registerEvents(heartUseListener, this);
+        getServer().getPluginManager().registerEvents(this, this);
 
         // Initialize crafting system
         initializeCraftingSystem();
@@ -72,6 +75,7 @@ public final class TheLifesteal extends JavaPlugin {
 
         // Load saved crafting processes
         craftingManager.loadCraftingProcesses();
+
 
         // Player quit cleanup
         getServer().getPluginManager().registerEvents(new Listener() {
@@ -94,6 +98,7 @@ public final class TheLifesteal extends JavaPlugin {
         getLogger().log(Level.INFO, "§c❤ §aLifesteal Plugin v2.0 enabled for 1.21.11! §c❤");
         getLogger().log(Level.INFO, "§6⚒ §eCustom Crafting System loaded! §6⚒");
         getLogger().log(Level.INFO, "§d✨ §eCustom Items Manager loaded! §d✨");
+
     }
 
     private void initializeCraftingSystem() {
@@ -131,6 +136,16 @@ public final class TheLifesteal extends JavaPlugin {
         if (getCommand("customitems") != null) {
             getCommand("customitems").setExecutor(commandHandler);
             getCommand("customitems").setTabCompleter(commandHandler);
+        }
+    }
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        if (craftingGUI != null) {
+            craftingGUI.removePlayer(uuid);
+            if (craftingGUI.getAdminGUI() != null) {
+                craftingGUI.getAdminGUI().cleanupPlayer(uuid);
+            }
         }
     }
 

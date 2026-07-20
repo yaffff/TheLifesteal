@@ -392,4 +392,14 @@ public class CraftingManager {
     private String formatMaterialName(Material material) {
         return material.name().replace("_", " ").toLowerCase();
     }
+    public void clearClaimedProcesses(UUID uuid) {
+        List<CraftingProcess> processes = activeProcesses.get(uuid);
+        if (processes != null) {
+            processes.removeIf(CraftingProcess::isClaimed);
+            if (processes.isEmpty()) {
+                activeProcesses.remove(uuid);
+            }
+            scheduleSave(); // save the changes
+        }
+    }
 }

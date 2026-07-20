@@ -17,16 +17,12 @@ public class DeathListener implements Listener {
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        Player player = event.getEntity();
+        Player victim = event.getEntity();
+        Player killer = victim.getKiller();
 
-        // Check if player was killed by another player (optional, for PvP-only lifesteal)
-        if (player.getKiller() != null && player.getKiller() instanceof Player) {
-            // Remove heart from victim
-            heartManager.removeHeartOnDeath(player);
-
-            // Give heart to killer (optional feature)
-            Player killer = player.getKiller();
-            heartManager.applyHeartEffect(killer);
+        if (killer != null && killer instanceof Player) {
+            // Victim may drop a heart; killer doesn't auto-gain
+            heartManager.removeHeartOnDeath(victim);
         }
     }
 }

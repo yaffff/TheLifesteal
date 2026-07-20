@@ -21,6 +21,7 @@ public class ConfigManager {
     private double halfHeartValue;
     private boolean dropHeartsOnDeath;
     private double maxHealthCap;
+    private double dropChance; // NEW
 
     // Sound settings
     private boolean heartUseSound;
@@ -52,6 +53,7 @@ public class ConfigManager {
         halfHeartValue = config.getDouble("settings.half-heart-value", 1.0);
         dropHeartsOnDeath = config.getBoolean("settings.drop-hearts-on-death", true);
         maxHealthCap = config.getDouble("settings.max-health-cap", 40.0);
+        dropChance = config.getDouble("settings.drop-chance", 1.0); // NEW
 
         // Load sound settings
         heartUseSound = config.getBoolean("settings.sounds.heart-use", true);
@@ -79,7 +81,6 @@ public class ConfigManager {
                 maxCraftsMap.put(key, craftsSection.getInt(key));
             }
         }
-        // fallback defaults if nothing in config
         if (maxCraftsMap.isEmpty()) {
             maxCraftsMap.put("default", 5);
             maxCraftsMap.put("op", 100);
@@ -109,15 +110,14 @@ public class ConfigManager {
     public boolean isHeartGlow() { return heartGlow; }
     public int getHeartCustomModelData() { return heartCustomModelData; }
     public double getMaxHealthCap() { return maxHealthCap; }
+    public double getDropChance() { return dropChance; } // NEW
 
     public int getMaxCraftsForPlayer(Player player) {
-        // Check for a specific permission like thelifesteal.maxcrafts.10
         for (int i = 100; i > 0; i--) {
             if (player.hasPermission("thelifesteal.maxcrafts." + i)) {
                 return i;
             }
         }
-        // fallback: use op or default group
         if (player.isOp()) {
             return maxCraftsMap.getOrDefault("op", 100);
         }

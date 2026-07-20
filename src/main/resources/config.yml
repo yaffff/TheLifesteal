@@ -23,6 +23,8 @@ settings:
   # Broadcast lifesteal events to all players
   broadcast-lifesteal: true
 
+  drop-chance: 1.0   # 1.0 = 100% chance, 0.5 = 50%, etc.
+
   # Sound effects
   sounds:
     heart-use: true

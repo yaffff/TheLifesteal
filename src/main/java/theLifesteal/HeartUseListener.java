@@ -39,8 +39,11 @@ public class HeartUseListener implements Listener {
         event.setCancelled(true);
         Player player = event.getPlayer();
 
-        // Apply the heart effect
-        heartManager.applyHeartEffect(player);
+        // Apply the heart effect – returns false if no change (cap reached)
+        if (!heartManager.applyHeartEffect(player)) {
+            // Effect not applied, do not consume item
+            return;
+        }
 
         // Remove one item from stack
         item.setAmount(item.getAmount() - 1);

@@ -10,7 +10,6 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
 import theLifesteal.ColorUtils;
 
@@ -129,42 +128,51 @@ public class RecipeBookListener implements Listener {
             craftingGUI.openMainMenu(event.getPlayer());
         }
     }
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        deathBooks.remove(event.getPlayer());
-    }
-
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         String title = event.getView().getTitle();
 
+        // ---- FIX 1: Recipe Editor handling ----
+        if (title.contains("Recipe Editor")) {
+            // Allow clicks in the player's own inventory (bottom)
+            if (event.getClickedInventory() != null &&
+                    event.getClickedInventory().equals(event.getView().getBottomInventory())) {
+                // Let normal inventory actions happen (pick up, place, etc.)
+                event.setCancelled(false);
+                return;
+            }
 
-        // Crafting GUIs (including editor sub-menus) are handled first
+            // Top inventory (the editor) – we handle clicks ourselves
+            event.setCancelled(true);
+            craftingGUI.getAdminGUI().handleEditorClick(
+                    player,
+                    event.getSlot(),
+                    event.getClick(),
+                    event.getCursor(),
+                    event.getCurrentItem()
+            );
+            return;
+        }
+
+        // ---- Other crafting GUIs (main menu, details, active, admin) ----
         if (isCraftingGUI(title)) {
+            // We still want to block bottom clicks in these other GUIs to prevent item stealing
+            // But we allow the top inventory clicks to be handled by CraftingGUI
             event.setCancelled(true);
             craftingGUI.handleClick(player, title, event.getSlot(), event.getClick());
             return;
         }
 
-        // Recipe book protection
+        // ---- Recipe book protection (unchanged) ----
         int bookSlot = recipeBookItem.getSlot();
         ItemStack current = event.getCurrentItem();
         ItemStack cursor = event.getCursor();
 
         if (recipeBookItem.isRecipeBook(current) || recipeBookItem.isRecipeBook(cursor)) {
             event.setCancelled(true);
-            if (event.getClick() == ClickType.RIGHT) {
-                craftingGUI.openMainMenu(player);
-            }
-            return;
-        }
-
-
-        if (recipeBookItem.isRecipeBook(current) || recipeBookItem.isRecipeBook(cursor)) {
-            event.setCancelled(true);
-            if (event.getClick() == ClickType.RIGHT) {
+            if (event.getSlot() == bookSlot && event.getClick() == ClickType.RIGHT) {
                 craftingGUI.openMainMenu(player);
             }
             return;
@@ -184,6 +192,7 @@ public class RecipeBookListener implements Listener {
             }
         }
     }
+
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
@@ -206,9 +215,6 @@ public class RecipeBookListener implements Listener {
         }
     }
 
-    /**
-     * Check if the inventory title matches any crafting GUI
-     */
     private boolean isCraftingGUI(String title) {
         return title.contains("Custom Crafting") ||
                 title.contains("Recipe Details") ||
@@ -216,7 +222,7 @@ public class RecipeBookListener implements Listener {
                 title.contains("Admin Crafting") ||
                 title.contains("Recipe Editor") ||
                 title.contains("Custom Items") ||
-                title.contains("Set Crafting Time") ||
+                title.contains("Set Crafting Time") ||  // sub-editors
                 title.contains("Set XP Reward") ||
                 title.contains("Set Amount for");
     }

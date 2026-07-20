@@ -26,7 +26,7 @@ public class CraftingGUI {
     private final Map<UUID, Integer> playerPages;
     private final Map<UUID, String> playerCategories;
     private final Map<UUID, String> viewingRecipe;
-    private final NamespacedKey recipeKey;
+    private final NamespacedKey recipeIdKey; // NEW
 
     public CraftingGUI(JavaPlugin plugin, CraftingManager craftingManager,
                        FileConfiguration config, CustomItemManager customItemManager) {
@@ -38,7 +38,7 @@ public class CraftingGUI {
         this.playerPages = new HashMap<>();
         this.playerCategories = new HashMap<>();
         this.viewingRecipe = new HashMap<>();
-        this.recipeKey = new NamespacedKey(plugin, "gui_recipe_id");
+        this.recipeIdKey = new NamespacedKey(plugin, "gui_recipe_id"); // NEW
     }
 
     public AdminCraftingGUI getAdminGUI() {
@@ -51,6 +51,7 @@ public class CraftingGUI {
 
         String title = ColorUtils.colorize(config.getString("crafting.gui.title",
                 "&6✦ &e&lCustom Crafting Menu &6✦"));
+
         Inventory gui = Bukkit.createInventory(null, 54, Component.text(title));
         updateMainMenu(player, gui);
         player.openInventory(gui);
@@ -85,8 +86,8 @@ public class CraftingGUI {
             ItemStack display = recipe.getResult().clone();
             ItemMeta meta = display.getItemMeta();
 
-            // --- Store recipe ID for reliable identification ---
-            meta.getPersistentDataContainer().set(recipeKey, PersistentDataType.STRING, recipe.getId());
+            // ---- Store recipe ID in PDC ----
+            meta.getPersistentDataContainer().set(recipeIdKey, PersistentDataType.STRING, recipe.getId());
 
             List<Component> lore = new ArrayList<>();
             lore.add(Component.text(ColorUtils.colorize("&7&m-------------------")));
@@ -104,22 +105,24 @@ public class CraftingGUI {
 
             meta.lore(lore);
             display.setItemMeta(meta);
+
             gui.setItem(recipeSlots[slotIndex], display);
             slotIndex++;
         }
 
         // Navigation buttons
+        int maxPages = getMaxPages(filteredRecipes.size(), itemsPerPage);
+
         if (page > 0) {
             gui.setItem(45, createConfigButton("previous-page"));
         }
+
         if (endIndex < filteredRecipes.size()) {
             gui.setItem(53, createConfigButton("next-page"));
         }
 
-        // Close button
         gui.setItem(49, createConfigButton("close-menu"));
 
-        // Active crafts button with count
         int activeCount = craftingManager.getPlayerProcesses(player.getUniqueId()).size();
         ItemStack activeButton = createConfigButton("active-crafts");
         ItemMeta activeMeta = activeButton.getItemMeta();
@@ -130,7 +133,6 @@ public class CraftingGUI {
         activeButton.setItemMeta(activeMeta);
         gui.setItem(48, activeButton);
 
-        // Category filter button
         ItemStack categoryButton = createConfigButton("category-filter");
         ItemMeta categoryMeta = categoryButton.getItemMeta();
         String categoryName = config.getString("crafting.gui.buttons.category-filter.name",
@@ -140,7 +142,6 @@ public class CraftingGUI {
         categoryButton.setItemMeta(categoryMeta);
         gui.setItem(46, categoryButton);
 
-        // Admin button (only for admins)
         if (player.hasPermission("thelifesteal.admin")) {
             ItemStack adminButton = new ItemStack(Material.REDSTONE_TORCH);
             ItemMeta adminMeta = adminButton.getItemMeta();
@@ -155,7 +156,6 @@ public class CraftingGUI {
             gui.setItem(47, adminButton);
         }
 
-        // Fill empty slots with glass
         ItemStack filler = createFillerItem();
         for (int i = 0; i < gui.getSize(); i++) {
             if (gui.getItem(i) == null) {
@@ -172,9 +172,9 @@ public class CraftingGUI {
 
         String title = ColorUtils.colorize(config.getString("crafting.gui.details-title",
                 "&6✦ &eRecipe Details &6✦"));
+
         Inventory gui = Bukkit.createInventory(null, 54, Component.text(title));
 
-        // Show recipe result in the center
         ItemStack result = recipe.getResult().clone();
         ItemMeta resultMeta = result.getItemMeta();
         List<Component> resultLore = new ArrayList<>();
@@ -186,7 +186,7 @@ public class CraftingGUI {
             resultLore.add(Component.text(ColorUtils.colorize("&e▶ XP Reward: &f" + recipe.getExperienceReward())));
         }
         resultLore.add(Component.text(""));
-        if (recipe.getDescription() != null) {
+        if (recipe.getDescription() != null && !recipe.getDescription().isEmpty()) {
             resultLore.add(Component.text(ColorUtils.colorize("&e▶ Description:")));
             for (String desc : recipe.getDescription()) {
                 resultLore.add(Component.text(ColorUtils.colorize("  &7" + desc)));
@@ -195,11 +195,12 @@ public class CraftingGUI {
         resultLore.add(Component.text(ColorUtils.colorize("&7&m-------------------")));
         resultMeta.lore(resultLore);
         result.setItemMeta(resultMeta);
+
         gui.setItem(22, result);
 
-        // Show required materials
         int[] matSlots = {10, 11, 12, 13, 19, 20, 21, 23, 24};
         int matIndex = 0;
+
         for (Map.Entry<Material, Integer> entry : recipe.getMaterials().entrySet()) {
             if (matIndex >= matSlots.length) break;
 
@@ -213,11 +214,11 @@ public class CraftingGUI {
                     Component.text(ColorUtils.colorize("&7this material!"))
             ));
             matItem.setItemMeta(matMeta);
+
             gui.setItem(matSlots[matIndex], matItem);
             matIndex++;
         }
 
-        // Craft button
         ItemStack craftButton = createConfigButton("start-crafting");
         ItemMeta craftMeta = craftButton.getItemMeta();
         List<Component> craftLore = new ArrayList<>();
@@ -230,14 +231,15 @@ public class CraftingGUI {
         craftButton.setItemMeta(craftMeta);
         gui.setItem(31, craftButton);
 
-        // Back button
         gui.setItem(49, createConfigButton("back-button"));
 
-        // Fill empty slots
         ItemStack filler = createFillerItem();
         for (int i = 0; i < gui.getSize(); i++) {
-            if (gui.getItem(i) == null) gui.setItem(i, filler.clone());
+            if (gui.getItem(i) == null) {
+                gui.setItem(i, filler.clone());
+            }
         }
+
         player.openInventory(gui);
     }
 
@@ -246,6 +248,7 @@ public class CraftingGUI {
 
         String title = ColorUtils.colorize(config.getString("crafting.gui.active-title",
                 "&6✦ &eActive Crafts &6✦"));
+
         Inventory gui = Bukkit.createInventory(null, 54, Component.text(title));
 
         if (processes.isEmpty()) {
@@ -288,42 +291,63 @@ public class CraftingGUI {
                 lore.add(Component.text(ColorUtils.colorize("&7&m-------------------")));
                 meta.lore(lore);
                 display.setItemMeta(meta);
+
                 gui.setItem(i + 10, display);
             }
         }
 
-        // Back button
         gui.setItem(49, createConfigButton("back-button"));
+
+        // Clear completed button (slot 50)
+        ItemStack clearButton = new ItemStack(Material.LAVA_BUCKET);
+        ItemMeta clearMeta = clearButton.getItemMeta();
+        clearMeta.displayName(Component.text(ColorUtils.colorize("&c✖ &4Clear Completed &c✖")));
+        clearMeta.lore(Arrays.asList(
+                Component.text(ColorUtils.colorize("&7Remove all claimed items")),
+                Component.text(ColorUtils.colorize("&7from this list."))
+        ));
+        clearButton.setItemMeta(clearMeta);
+        gui.setItem(50, clearButton);
+
         ItemStack filler = createFillerItem();
         for (int i = 0; i < gui.getSize(); i++) {
-            if (gui.getItem(i) == null) gui.setItem(i, filler.clone());
+            if (gui.getItem(i) == null) {
+                gui.setItem(i, filler.clone());
+            }
         }
+
         player.openInventory(gui);
     }
 
     public void handleClick(Player player, String title, int slot, ClickType clickType) {
-        // Sub-editors (time, XP, material amount) go first
+        // Sub-editors
         if (title.contains("Set Crafting Time") || title.contains("Set XP Reward") || title.contains("Set Amount for")) {
             adminGUI.handleSubEditorClick(player, title, slot, clickType);
             return;
         }
-
+        // Main menu
         if (title.contains("Custom Crafting Menu")) {
             handleMainMenuClick(player, slot, clickType);
-        } else if (title.contains("Recipe Details")) {
+            return;
+        }
+        // Recipe details
+        if (title.contains("Recipe Details")) {
             handleRecipeDetailsClick(player, slot);
-        } else if (title.contains("Active Crafts")) {
+            return;
+        }
+        // Active crafts
+        if (title.contains("Active Crafts")) {
             handleActiveCraftsClick(player, slot, clickType);
-        } else if (title.contains("Admin Crafting Menu")) {
-            adminGUI.handleAdminMenuClick(player, slot, clickType,
-                    player.getOpenInventory().getItem(slot));
-        } else if (title.contains("Recipe Editor")) {
-            adminGUI.handleEditorClick(player, slot, clickType,
-                    player.getItemOnCursor(),
-                    player.getOpenInventory().getItem(slot));
-        } else if (title.contains("Custom Items")) {
-            adminGUI.handleCustomItemsClick(player, slot, clickType,
-                    player.getOpenInventory().getItem(slot));
+            return;
+        }
+        // Admin menu
+        if (title.contains("Admin Crafting Menu")) {
+            adminGUI.handleAdminMenuClick(player, slot, clickType, player.getOpenInventory().getItem(slot));
+            return;
+        }
+        if (title.contains("Custom Items")) {
+            adminGUI.handleCustomItemsClick(player, slot, clickType, player.getOpenInventory().getItem(slot));
+            return;
         }
     }
 
@@ -334,40 +358,40 @@ public class CraftingGUI {
         int page = playerPages.getOrDefault(player.getUniqueId(), 0);
 
         switch (slot) {
-            case 45: // Previous page
+            case 45:
                 if (page > 0) {
                     playerPages.put(player.getUniqueId(), page - 1);
                     updateMainMenu(player, player.getOpenInventory().getTopInventory());
                 }
                 break;
-            case 46: // Category filter
+            case 46:
                 cycleCategories(player);
                 playerPages.put(player.getUniqueId(), 0);
                 updateMainMenu(player, player.getOpenInventory().getTopInventory());
                 break;
-            case 47: // Admin menu
+            case 47:
                 if (player.hasPermission("thelifesteal.admin")) {
                     Bukkit.getScheduler().runTaskLater(plugin,
                             () -> adminGUI.openAdminMenu(player), 1L);
                 }
                 break;
-            case 48: // Active crafts
+            case 48:
                 openActiveCrafts(player);
                 break;
-            case 49: // Close
+            case 49:
                 player.closeInventory();
                 break;
-            case 53: // Next page
+            case 53:
                 playerPages.put(player.getUniqueId(), page + 1);
                 updateMainMenu(player, player.getOpenInventory().getTopInventory());
                 break;
             default:
-                // Identify recipe by persistent data
+                // ---- Fix: retrieve recipe ID from PDC ----
                 if (clicked.hasItemMeta()) {
-                    String id = clicked.getItemMeta().getPersistentDataContainer()
-                            .get(recipeKey, PersistentDataType.STRING);
-                    if (id != null) {
-                        openRecipeDetails(player, id);
+                    String recipeId = clicked.getItemMeta().getPersistentDataContainer()
+                            .get(recipeIdKey, PersistentDataType.STRING);
+                    if (recipeId != null) {
+                        openRecipeDetails(player, recipeId);
                     }
                 }
                 break;
@@ -375,24 +399,27 @@ public class CraftingGUI {
     }
 
     public void handleRecipeDetailsClick(Player player, int slot) {
-        if (slot == 49) {
-            openMainMenu(player);
-        } else if (slot == 31) {
-            String recipeId = viewingRecipe.get(player.getUniqueId());
-            if (recipeId != null) {
-                CraftingRecipe recipe = craftingManager.getRecipe(recipeId);
-                if (recipe != null) {
-                    if (craftingManager.startCrafting(player, recipeId)) {
-                        player.sendMessage(ColorUtils.colorize("&a✦ Started crafting: &e" +
-                                recipe.getResult().getItemMeta().getDisplayName()));
-                        player.sendMessage(ColorUtils.colorize("&7Time remaining: &f" +
-                                formatTime(recipe.getCraftingTime())));
-                        player.closeInventory();
-                    } else {
-                        player.sendMessage(ColorUtils.colorize("&c✖ Cannot start crafting! Check materials or active crafts limit."));
+        switch (slot) {
+            case 49:
+                openMainMenu(player);
+                break;
+            case 31:
+                String recipeId = viewingRecipe.get(player.getUniqueId());
+                if (recipeId != null) {
+                    CraftingRecipe recipe = craftingManager.getRecipe(recipeId);
+                    if (recipe != null) {
+                        if (craftingManager.startCrafting(player, recipeId)) {
+                            player.sendMessage(ColorUtils.colorize("&a✦ Started crafting: &e" +
+                                    recipe.getResult().getItemMeta().getDisplayName()));
+                            player.sendMessage(ColorUtils.colorize("&7Time remaining: &f" +
+                                    formatTime(recipe.getCraftingTime())));
+                            player.closeInventory();
+                        } else {
+                            player.sendMessage(ColorUtils.colorize("&c✖ Cannot start crafting! Check materials or active crafts limit."));
+                        }
                     }
                 }
-            }
+                break;
         }
     }
 
@@ -401,10 +428,21 @@ public class CraftingGUI {
             openMainMenu(player);
             return;
         }
+
+        // ---- Clear completed button ----
+        if (slot == 50) {
+            craftingManager.clearClaimedProcesses(player.getUniqueId());
+            openActiveCrafts(player);
+            player.sendMessage(ColorUtils.colorize("&a✔ All completed items cleared!"));
+            return;
+        }
+
         int processIndex = slot - 10;
         List<CraftingProcess> processes = craftingManager.getPlayerProcesses(player.getUniqueId());
+
         if (processIndex >= 0 && processIndex < processes.size()) {
             CraftingProcess process = processes.get(processIndex);
+
             if (clickType.isRightClick()) {
                 if (!process.isCompleted() && !process.isClaimed()) {
                     if (craftingManager.cancelCrafting(player, processIndex)) {
@@ -416,7 +454,8 @@ public class CraftingGUI {
                 if (process.isCompleted() && !process.isClaimed()) {
                     if (craftingManager.claimItem(player, processIndex)) {
                         player.sendMessage(ColorUtils.colorize("&a✔ Item claimed successfully!"));
-                        openActiveCrafts(player);
+                        // Reopen after 1 tick to refresh
+                        Bukkit.getScheduler().runTaskLater(plugin, () -> openActiveCrafts(player), 1L);
                     }
                 }
             }
@@ -427,28 +466,26 @@ public class CraftingGUI {
         List<String> categories = new ArrayList<>();
         categories.add("ALL");
         categories.addAll(craftingManager.getCategories());
+
         String current = playerCategories.getOrDefault(player.getUniqueId(), "ALL");
         int currentIndex = categories.indexOf(current);
         int nextIndex = (currentIndex + 1) % categories.size();
-        playerCategories.put(player.getUniqueId(), categories.get(nextIndex));
-    }
 
-    /**
-     * Remove all GUI data associated with a player (call on quit).
-     */
-    public void removePlayer(UUID uuid) {
-        playerPages.remove(uuid);
-        playerCategories.remove(uuid);
-        viewingRecipe.remove(uuid);
+        playerCategories.put(player.getUniqueId(), categories.get(nextIndex));
     }
 
     public String formatTime(long seconds) {
         long hours = seconds / 3600;
         long minutes = (seconds % 3600) / 60;
         long secs = seconds % 60;
-        if (hours > 0) return String.format("%dh %dm %ds", hours, minutes, secs);
-        if (minutes > 0) return String.format("%dm %ds", minutes, secs);
-        return String.format("%ds", secs);
+
+        if (hours > 0) {
+            return String.format("%dh %dm %ds", hours, minutes, secs);
+        } else if (minutes > 0) {
+            return String.format("%dm %ds", minutes, secs);
+        } else {
+            return String.format("%ds", secs);
+        }
     }
 
     private String formatMaterialName(Material material) {
@@ -457,17 +494,24 @@ public class CraftingGUI {
 
     private ItemStack createConfigButton(String buttonPath) {
         String path = "crafting.gui.buttons." + buttonPath + ".";
-        Material material = Material.getMaterial(config.getString(path + "material", "BARRIER"));
+
+        Material material = Material.getMaterial(
+                config.getString(path + "material", "BARRIER"));
         if (material == null) material = Material.BARRIER;
+
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.text(ColorUtils.colorize(config.getString(path + "name", "&7Button"))));
+
+        meta.displayName(Component.text(ColorUtils.colorize(
+                config.getString(path + "name", "&7Button"))));
+
         List<String> loreConfig = config.getStringList(path + "lore");
         List<Component> lore = new ArrayList<>();
         for (String line : loreConfig) {
             lore.add(Component.text(ColorUtils.colorize(line)));
         }
         meta.lore(lore);
+
         item.setItemMeta(meta);
         return item;
     }
@@ -476,14 +520,22 @@ public class CraftingGUI {
         Material material = Material.getMaterial(
                 config.getString("crafting.gui.filler.material", "BLACK_STAINED_GLASS_PANE"));
         if (material == null) material = Material.BLACK_STAINED_GLASS_PANE;
+
         ItemStack filler = new ItemStack(material);
         ItemMeta meta = filler.getItemMeta();
-        meta.displayName(Component.text(ColorUtils.colorize(config.getString("crafting.gui.filler.name", " "))));
+        meta.displayName(Component.text(ColorUtils.colorize(
+                config.getString("crafting.gui.filler.name", " "))));
         filler.setItemMeta(meta);
         return filler;
     }
 
     private int getMaxPages(int totalItems, int itemsPerPage) {
         return (int) Math.ceil((double) totalItems / itemsPerPage);
+    }
+
+    public void removePlayer(UUID uuid) {
+        playerPages.remove(uuid);
+        playerCategories.remove(uuid);
+        viewingRecipe.remove(uuid);
     }
 }
