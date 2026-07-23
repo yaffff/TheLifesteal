@@ -33,6 +33,9 @@ public class AdvancedCustomItemManager {
     private final Set<String> activeInstanceUuids;
     private ItemAbilityManager abilityManager;
 
+    // Fixed UUID for all custom attribute modifiers — ensures we SET not ADD
+    private static final UUID CUSTOM_ATTR_UUID = UUID.nameUUIDFromBytes("thelifesteal_attr".getBytes());
+
     public AdvancedCustomItemManager(JavaPlugin plugin) {
         this.plugin = plugin;
         this.dataFile = new File(plugin.getDataFolder(), "custom_items.yml");
@@ -329,6 +332,7 @@ public class AdvancedCustomItemManager {
         ItemMeta meta = result.getItemMeta();
         if (meta == null) return result;
 
+        // Clear everything
         meta.setDisplayName(null);
         meta.setLore(null);
         meta.setUnbreakable(false);
@@ -340,6 +344,18 @@ public class AdvancedCustomItemManager {
             meta.removeEnchant(ench);
         }
 
+        // Zero out base attributes for weapons/armor/tools using fixed UUID
+        // This SETS the attribute to 0, then custom values SET on top
+        if (AdvancedCustomItem.NON_STACKABLE_CATEGORIES.contains(item.getCategory())) {
+            AttributeModifier zeroMod = new AttributeModifier(
+                    CUSTOM_ATTR_UUID, "custom_attr", 0, AttributeModifier.Operation.ADD_NUMBER);
+            meta.addAttributeModifier(Attribute.ATTACK_DAMAGE, zeroMod);
+            meta.addAttributeModifier(Attribute.ATTACK_SPEED, zeroMod);
+            meta.addAttributeModifier(Attribute.ARMOR, zeroMod);
+            meta.addAttributeModifier(Attribute.ARMOR_TOUGHNESS, zeroMod);
+        }
+
+        // Display name
         String rarityColor = ItemLoreBuilder.getRarityColor(item.getRarity());
         if (item.getDisplayName() != null && !item.getDisplayName().isEmpty()) {
             meta.setDisplayName(ColorUtils.colorize(rarityColor + item.getDisplayName()));
@@ -347,19 +363,23 @@ public class AdvancedCustomItemManager {
             meta.setDisplayName(ColorUtils.colorize(rarityColor + formatMaterialName(item.getVisualItemType())));
         }
 
+        // Lore
         List<String> builtLore = ItemLoreBuilder.buildLore(item, abilityManager);
         if (!builtLore.isEmpty()) {
             meta.setLore(builtLore);
         }
 
+        // Enchants
         for (Map.Entry<Enchantment, Integer> entry : item.getEnchants().entrySet()) {
             meta.addEnchant(entry.getKey(), entry.getValue(), true);
         }
 
+        // Damage/durability
         if (item.getDamage() > 0) {
             ((org.bukkit.inventory.meta.Damageable) meta).setDamage(item.getDamage());
         }
 
+        // Flags
         if (item.hasFlag(CustomItemFlag.GLOW)) {
             meta.addEnchant(Enchantment.LUCK_OF_THE_SEA, 1, true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -376,16 +396,18 @@ public class AdvancedCustomItemManager {
         if (item.hasFlag(CustomItemFlag.HIDE_DYE)) meta.addItemFlags(ItemFlag.HIDE_DYE);
         if (item.hasFlag(CustomItemFlag.HIDE_ARMOR_TRIM)) meta.addItemFlags(ItemFlag.HIDE_ARMOR_TRIM);
 
+        // Custom attributes — SET using same fixed UUID (replaces the zero)
         for (Map.Entry<Attribute, Double> entry : item.getAttributes().entrySet()) {
             AttributeModifier modifier = new AttributeModifier(
-                    UUID.nameUUIDFromBytes(("custom_attr:" + entry.getKey().name()).getBytes()),
-                    "custom_mod",
+                    CUSTOM_ATTR_UUID,
+                    "custom_attr",
                     entry.getValue(),
                     AttributeModifier.Operation.ADD_NUMBER
             );
             meta.addAttributeModifier(entry.getKey(), modifier);
         }
 
+        // Store item ID
         meta.getPersistentDataContainer().set(itemIdKey, PersistentDataType.STRING, idToStore);
 
         result.setItemMeta(meta);
