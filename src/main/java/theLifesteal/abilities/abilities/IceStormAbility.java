@@ -1,0 +1,271 @@
+package theLifesteal.abilities.abilities;
+
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.Particle;
+import org.bukkit.Sound;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.FallingBlock;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Vector;
+import theLifesteal.ColorUtils;
+import theLifesteal.abilities.AbilityCooldownManager;
+import theLifesteal.abilities.ItemAbility;
+import theLifesteal.abilities.ItemAbilityData;
+import theLifesteal.abilities.ItemAbilityType;
+
+import java.util.*;
+
+public class IceStormAbility extends ItemAbility {
+
+    public IceStormAbility(JavaPlugin plugin) {
+        super(plugin, "ice_storm", "Ice Storm", ItemAbilityType.RIGHT_CLICK);
+    }
+
+    @Override
+    public Map<String, Object> getDefaultConfig() {
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("radius", 8);
+        config.put("duration", 6);
+        config.put("iceBlockDamage", 8.0);
+        config.put("iceBlocksPerWave", 6);
+        config.put("waveInterval", 20);
+        config.put("stunDuration", 2);
+        config.put("stunAmplifier", 5);
+        config.put("cooldown", 50);
+        return config;
+    }
+
+    @Override
+    public Map<String, ConfigField> getConfigFields() {
+        Map<String, ConfigField> fields = new LinkedHashMap<>();
+        fields.put("radius", new ConfigField("Storm Radius", "int", 3, 20));
+        fields.put("duration", new ConfigField("Duration (seconds)", "int", 2, 15));
+        fields.put("iceBlockDamage", new ConfigField("Ice Block Damage", "double", 1.0, 30.0));
+        fields.put("iceBlocksPerWave", new ConfigField("Ice Blocks per Wave", "int", 1, 20));
+        fields.put("waveInterval", new ConfigField("Ticks Between Waves", "int", 5, 60));
+        fields.put("stunDuration", new ConfigField("Stun Duration (s)", "int", 1, 10));
+        fields.put("stunAmplifier", new ConfigField("Stun Intensity (0-10)", "int", 0, 10));
+        fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        return fields;
+    }
+
+    @Override
+    public String buildLore(ItemAbilityData data) {
+        int radius = data.getConfigInt("radius");
+        int duration = data.getConfigInt("duration");
+        double dmg = data.getConfigDouble("iceBlockDamage");
+        int blocks = data.getConfigInt("iceBlocksPerWave");
+        int cooldown = data.getConfigInt("cooldown");
+        return "&7Create a &bblizzard &7costing &c50% HP\n&7Drops &b" + blocks + " ice blocks &7dealing &b" + formatDamage(dmg) + " &7& stuns\n&b" + radius + " block radius &7| &e" + duration + "s &8(&e" + cooldown + "s cooldown&8)";
+    }
+
+    @Override
+    public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
+        int cooldown = data.getConfigInt("cooldown");
+
+        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+            player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
+            return false;
+        }
+
+        double maxHP = player.getAttribute(Attribute.MAX_HEALTH).getValue();
+        double currentHP = player.getHealth();
+        double cost = maxHP * 0.5;
+
+        if (currentHP <= cost) {
+            player.sendMessage(ColorUtils.colorize("&cNot enough HP! Need at least " + String.format("%.1f", cost) + " HP."));
+            return false;
+        }
+
+        player.setHealth(currentHP - cost);
+
+        int radius = data.getConfigInt("radius");
+        int duration = data.getConfigInt("duration");
+        double iceBlockDamage = data.getConfigDouble("iceBlockDamage");
+        int iceBlocksPerWave = data.getConfigInt("iceBlocksPerWave");
+        int waveInterval = data.getConfigInt("waveInterval");
+        int stunDuration = data.getConfigInt("stunDuration");
+        int stunAmplifier = data.getConfigInt("stunAmplifier");
+
+        Location eyeLoc = player.getEyeLocation();
+        Vector direction = eyeLoc.getDirection();
+        Location stormCenter = eyeLoc.clone();
+
+        for (double d = 0; d <= 15; d += 0.5) {
+            Location check = eyeLoc.clone().add(direction.clone().multiply(d));
+            if (check.getBlock().getType().isSolid()) {
+                stormCenter = check.clone().add(0, 1, 0);
+                break;
+            }
+            if (d >= 14.5) {
+                stormCenter = check;
+            }
+        }
+
+        final Location center = stormCenter.clone();
+        final int totalTicks = duration * 20;
+
+        center.getWorld().playSound(center, Sound.WEATHER_RAIN_ABOVE, 2.0f, 1.0f);
+        center.getWorld().playSound(center, Sound.ENTITY_BREEZE_WIND_BURST, 1.5f, 0.5f);
+
+        for (int i = 0; i < 20; i++) {
+            player.getWorld().spawnParticle(Particle.DUST,
+                    player.getLocation().add(0, 1.5, 0),
+                    1, 0.3, 0.5, 0.3,
+                    new Particle.DustOptions(org.bukkit.Color.fromRGB(180, 0, 0), 2f));
+        }
+
+        new BukkitRunnable() {
+            int tick = 0;
+            boolean cleaning = false;
+            int cleanTick = 0;
+
+            @Override
+            public void run() {
+                // Phase 1: Storm active
+                if (!cleaning && tick < totalTicks) {
+                    double progress = (double) tick / totalTicks;
+                    double currentRadius = radius * (0.3 + progress * 0.7);
+
+                    // Snowstorm particles
+                    for (int i = 0; i < 40; i++) {
+                        double angle = Math.random() * Math.PI * 2;
+                        double dist = Math.random() * currentRadius;
+                        double x = Math.cos(angle) * dist;
+                        double z = Math.sin(angle) * dist;
+                        double y = 1 + Math.random() * 8;
+                        center.getWorld().spawnParticle(Particle.SNOWFLAKE,
+                                center.clone().add(x, y, z), 1, 0, 0, 0, 0.05);
+                    }
+
+                    // Wind swirl
+                    for (int i = 0; i < 20; i++) {
+                        double angle = (tick * 0.3) + (i * Math.PI * 2 / 20);
+                        double dist = currentRadius * 0.8;
+                        double x = Math.cos(angle) * dist;
+                        double z = Math.sin(angle) * dist;
+                        double y = 1 + Math.random() * 6;
+                        center.getWorld().spawnParticle(Particle.CLOUD,
+                                center.clone().add(x, y, z), 1, 0, 0, 0, 0.02);
+                    }
+
+                    // Ground frost
+                    for (int i = 0; i < 15; i++) {
+                        double angle = Math.random() * Math.PI * 2;
+                        double dist = Math.random() * currentRadius;
+                        double x = Math.cos(angle) * dist;
+                        double z = Math.sin(angle) * dist;
+                        center.getWorld().spawnParticle(Particle.DUST,
+                                center.clone().add(x, 0.1, z), 1, 0, 0, 0,
+                                new Particle.DustOptions(org.bukkit.Color.fromRGB(200, 220, 255), 1.5f));
+                    }
+
+                    // Drop ice blocks in waves
+                    if (tick % waveInterval == 0) {
+                        for (int i = 0; i < iceBlocksPerWave; i++) {
+                            double angle = Math.random() * Math.PI * 2;
+                            double dist = Math.random() * currentRadius * 0.8;
+                            double x = Math.cos(angle) * dist;
+                            double z = Math.sin(angle) * dist;
+                            Location dropLoc = center.clone().add(x, 10, z);
+
+                            FallingBlock iceBlock = center.getWorld().spawnFallingBlock(dropLoc, Material.PACKED_ICE.createBlockData());
+                            iceBlock.setDropItem(false);
+                            iceBlock.setHurtEntities(true);
+                            iceBlock.setDamagePerBlock((float) iceBlockDamage);
+                            iceBlock.setMaxDamage((int) (iceBlockDamage * 3));
+
+                            new BukkitRunnable() {
+                                @Override
+                                public void run() {
+                                    if (iceBlock.isDead() || !iceBlock.isValid() || iceBlock.isOnGround()) {
+                                        iceBlock.getWorld().spawnParticle(Particle.BLOCK,
+                                                iceBlock.getLocation(), 20, 0.5, 0.5, 0.5,
+                                                Material.ICE.createBlockData());
+                                        iceBlock.getWorld().playSound(iceBlock.getLocation(), Sound.BLOCK_GLASS_BREAK, 0.8f, 1.0f);
+                                        iceBlock.remove();
+                                        this.cancel();
+                                        return;
+                                    }
+                                    iceBlock.getWorld().spawnParticle(Particle.SNOWFLAKE,
+                                            iceBlock.getLocation(), 3, 0.3, 0.3, 0.3, 0.02);
+                                }
+                            }.runTaskTimer(getPlugin(), 0L, 2L);
+                        }
+                    }
+
+                    // Stun nearby entities
+                    for (Entity entity : center.getWorld().getNearbyEntities(center, currentRadius, 8, currentRadius)) {
+                        if (!(entity instanceof LivingEntity) || entity == player) continue;
+                        LivingEntity target = (LivingEntity) entity;
+                        double dist = target.getLocation().distance(center);
+                        if (dist <= currentRadius) {
+                            target.addPotionEffect(new PotionEffect(
+                                    PotionEffectType.SLOWNESS, 40, stunAmplifier, false, true, true));
+                            target.addPotionEffect(new PotionEffect(
+                                    PotionEffectType.WEAKNESS, 40, 2, false, true, true));
+                            target.addPotionEffect(new PotionEffect(
+                                    PotionEffectType.MINING_FATIGUE, 40, 2, false, true, true));
+
+                            if (tick % 10 == 0) {
+                                target.getWorld().spawnParticle(Particle.SNOWFLAKE,
+                                        target.getLocation().add(0, 1.5, 0),
+                                        10, 0.3, 0.5, 0.3, 0.03);
+                            }
+                        }
+                    }
+
+                    if (tick % 15 == 0) {
+                        center.getWorld().playSound(center, Sound.WEATHER_RAIN_ABOVE, 0.5f, 0.3f + (float)progress * 0.5f);
+                    }
+
+                    tick++;
+                    if (tick >= totalTicks) {
+                        cleaning = true;
+                    }
+                    return;
+                }
+
+                // Phase 2: Let final ice blocks fall, then clean up
+                if (cleaning) {
+                    cleanTick++;
+                    if (cleanTick >= 30) {
+                        int cleanRadius = radius + 1;
+                        for (int x = -cleanRadius; x <= cleanRadius; x++) {
+                            for (int y = -3; y <= 12; y++) {
+                                for (int z = -cleanRadius; z <= cleanRadius; z++) {
+                                    Location checkLoc = center.clone().add(x, y, z);
+                                    Material type = checkLoc.getBlock().getType();
+                                    if (type == Material.PACKED_ICE || type == Material.ICE || type == Material.BLUE_ICE) {
+                                        checkLoc.getBlock().setType(Material.AIR);
+                                    }
+                                }
+                            }
+                        }
+                        center.getWorld().spawnParticle(Particle.SNOWFLAKE, center, 50, radius, 3, radius, 0.1);
+                        center.getWorld().playSound(center, Sound.BLOCK_GLASS_BREAK, 2.0f, 0.5f);
+                        this.cancel();
+                    }
+                }
+            }
+        }.runTaskTimer(getPlugin(), 0L, 1L);
+
+        player.sendMessage(ColorUtils.colorize("&b❄ Ice Storm unleashed!"));
+        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+        return true;
+    }
+
+    private String formatDamage(double damage) {
+        if (damage == Math.floor(damage)) return (int) damage + "❤";
+        return damage + "❤";
+    }
+}

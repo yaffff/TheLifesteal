@@ -12,6 +12,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import theLifesteal.ColorUtils;
+import theLifesteal.abilities.ItemAbilityManager;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,13 +24,17 @@ public class AdvancedCustomItemManager {
     private final File dataFile;
     private final Map<String, AdvancedCustomItem> items;
     private final NamespacedKey itemIdKey;
+    private ItemAbilityManager abilityManager;
 
     public AdvancedCustomItemManager(JavaPlugin plugin) {
         this.plugin = plugin;
         this.dataFile = new File(plugin.getDataFolder(), "custom_items.yml");
         this.items = new LinkedHashMap<>();
         this.itemIdKey = new NamespacedKey(plugin, "custom_item_id");
-        loadItems();
+    }
+
+    public void setAbilityManager(ItemAbilityManager abilityManager) {
+        this.abilityManager = abilityManager;
     }
 
     public NamespacedKey getItemIdKey() { return itemIdKey; }
@@ -51,6 +56,15 @@ public class AdvancedCustomItemManager {
                 AdvancedCustomItem item = new AdvancedCustomItem(id, baseItem);
                 if (itemSection.contains("displayName")) item.setDisplayName(itemSection.getString("displayName"));
                 if (itemSection.contains("lore")) item.setLore(itemSection.getStringList("lore"));
+                if (itemSection.contains("category")) item.setCategory(itemSection.getString("category", "Misc"));
+                if (itemSection.contains("rarity")) {
+                    String rarityStr = itemSection.getString("rarity", "COMMON");
+                    try {
+                        item.setRarity(ItemLoreBuilder.Rarity.valueOf(rarityStr.toUpperCase()));
+                    } catch (IllegalArgumentException e) {
+                        item.setRarity(ItemLoreBuilder.Rarity.COMMON);
+                    }
+                }
 
                 ConfigurationSection attrSection = itemSection.getConfigurationSection("attributes");
                 if (attrSection != null) {
@@ -73,12 +87,48 @@ public class AdvancedCustomItemManager {
                     }
                     item.setFlags(flags);
                 }
-                for (String flagName : flagNames) {
-                    try { item.getFlags().add(CustomItemFlag.valueOf(flagName)); } catch (IllegalArgumentException ignored) {}
-                }
 
                 if (itemSection.contains("customModelData")) item.setCustomModelData(itemSection.getInt("customModelData"));
                 if (itemSection.contains("damage")) item.setDamage(itemSection.getInt("damage"));
+
+                // Load enchants
+                List<String> enchantData = itemSection.getStringList("enchants");
+                if (!enchantData.isEmpty()) {
+                    Map<Enchantment, Integer> enchants = new LinkedHashMap<>();
+                    for (String data : enchantData) {
+                        String[] parts = data.split(":");
+                        if (parts.length == 2) {
+                            Enchantment ench = Enchantment.getByKey(NamespacedKey.minecraft(parts[0].toLowerCase()));
+                            if (ench != null) {
+                                try {
+                                    enchants.put(ench, Integer.parseInt(parts[1]));
+                                } catch (NumberFormatException ignored) {}
+                            }
+                        }
+                    }
+                    item.setEnchants(enchants);
+                }
+
+                List<String> potionData = itemSection.getStringList("potionEffects");
+                if (!potionData.isEmpty()) {
+                    List<AdvancedCustomItem.PotionEffectData> effects = new ArrayList<>();
+                    for (String data : potionData) {
+                        AdvancedCustomItem.PotionEffectData effect = AdvancedCustomItem.PotionEffectData.deserialize(data);
+                        if (effect != null) effects.add(effect);
+                    }
+                    item.setPotionEffects(effects);
+                }
+
+                if (itemSection.contains("abilities") && abilityManager != null) {
+                    ConfigurationSection abilitiesSection = itemSection.getConfigurationSection("abilities");
+                    if (abilitiesSection != null) {
+                        Map<String, Object> rawMap = new LinkedHashMap<>();
+                        for (String key : abilitiesSection.getKeys(false)) {
+                            rawMap.put(key, abilitiesSection.get(key));
+                        }
+                        item.setAbilities(abilityManager.deserialize(rawMap));
+                    }
+                }
 
                 if (itemSection.contains("futureExtensions")) {
                     ConfigurationSection extSection = itemSection.getConfigurationSection("futureExtensions");
@@ -105,6 +155,8 @@ public class AdvancedCustomItemManager {
             itemSection.set("baseItem", item.getBaseItem());
             if (item.getDisplayName() != null) itemSection.set("displayName", item.getDisplayName());
             if (!item.getLore().isEmpty()) itemSection.set("lore", item.getLore());
+            itemSection.set("category", item.getCategory());
+            itemSection.set("rarity", item.getRarity().name());
             if (!item.getAttributes().isEmpty()) {
                 ConfigurationSection attrSection = itemSection.createSection("attributes");
                 for (Map.Entry<Attribute, Double> entry : item.getAttributes().entrySet()) {
@@ -118,6 +170,31 @@ public class AdvancedCustomItemManager {
             }
             if (item.getCustomModelData() != 0) itemSection.set("customModelData", item.getCustomModelData());
             if (item.getDamage() != 0) itemSection.set("damage", item.getDamage());
+
+            // Save enchants
+            if (!item.getEnchants().isEmpty()) {
+                List<String> enchantData = new ArrayList<>();
+                for (Map.Entry<Enchantment, Integer> entry : item.getEnchants().entrySet()) {
+                    enchantData.add(entry.getKey().getKey().getKey() + ":" + entry.getValue());
+                }
+                itemSection.set("enchants", enchantData);
+            }
+
+            if (!item.getPotionEffects().isEmpty()) {
+                List<String> potionData = new ArrayList<>();
+                for (AdvancedCustomItem.PotionEffectData effect : item.getPotionEffects()) {
+                    potionData.add(effect.serialize());
+                }
+                itemSection.set("potionEffects", potionData);
+            }
+
+            if (abilityManager != null) {
+                Map<String, Object> abilityData = abilityManager.serialize(item.getAbilities());
+                if (!abilityData.isEmpty()) {
+                    itemSection.createSection("abilities", abilityData);
+                }
+            }
+
             if (!item.getFutureExtensions().isEmpty()) {
                 ConfigurationSection extSection = itemSection.createSection("futureExtensions");
                 for (Map.Entry<String, Object> entry : item.getFutureExtensions().entrySet()) {
@@ -146,46 +223,52 @@ public class AdvancedCustomItemManager {
     @SuppressWarnings("deprecation")
     public ItemStack buildItem(AdvancedCustomItem item) {
         if (item == null) return null;
+        return buildItem(item, item.getId());
+    }
 
-        // Start with a clone of the base item
+    @SuppressWarnings("deprecation")
+    public ItemStack buildItem(AdvancedCustomItem item, String idToStore) {
+        if (item == null) return null;
+
         ItemStack result = item.getBaseItem().clone();
         ItemMeta meta = result.getItemMeta();
         if (meta == null) return result;
 
-        // ---- WIPE ALL EXISTING METADATA ----
         meta.setDisplayName(null);
         meta.setLore(null);
         meta.setCustomModelData(null);
         meta.setUnbreakable(false);
-        // Remove all attribute modifiers
         for (Attribute attr : Attribute.values()) {
             meta.removeAttributeModifier(attr);
         }
-        // Remove all item flags
         meta.removeItemFlags(ItemFlag.values());
-        // Remove all enchantments
         for (Enchantment ench : meta.getEnchants().keySet()) {
             meta.removeEnchant(ench);
         }
-        // Note: Persistent data container is not cleared here – we'll overwrite our key later.
 
-        // ---- APPLY OUR CUSTOM DATA ----
+        String rarityColor = ItemLoreBuilder.getRarityColor(item.getRarity());
         if (item.getDisplayName() != null && !item.getDisplayName().isEmpty()) {
-            meta.setDisplayName(ColorUtils.colorize(item.getDisplayName()));
+            meta.setDisplayName(ColorUtils.colorize(rarityColor + item.getDisplayName()));
+        } else {
+            meta.setDisplayName(ColorUtils.colorize(rarityColor + formatMaterialName(result.getType())));
         }
-        if (!item.getLore().isEmpty()) {
-            List<String> colored = new ArrayList<>();
-            for (String line : item.getLore()) colored.add(ColorUtils.colorize(line));
-            meta.setLore(colored);
+
+        List<String> builtLore = ItemLoreBuilder.buildLore(item, abilityManager);
+        if (!builtLore.isEmpty()) {
+            meta.setLore(builtLore);
         }
+
+        // Apply custom enchants
+        for (Map.Entry<Enchantment, Integer> entry : item.getEnchants().entrySet()) {
+            meta.addEnchant(entry.getKey(), entry.getValue(), true);
+        }
+
         if (item.getCustomModelData() > 0) meta.setCustomModelData(item.getCustomModelData());
 
-        // Durability
         if (item.getDamage() > 0 && result.getType().getMaxDurability() > 0) {
             result.setDurability((short) Math.min(result.getType().getMaxDurability(), item.getDamage()));
         }
 
-        // Flags
         if (item.hasFlag(CustomItemFlag.GLOW)) {
             meta.addEnchant(Enchantment.LUCK_OF_THE_SEA, 1, true);
             meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -202,8 +285,6 @@ public class AdvancedCustomItemManager {
         if (item.hasFlag(CustomItemFlag.HIDE_DYE)) meta.addItemFlags(ItemFlag.HIDE_DYE);
         if (item.hasFlag(CustomItemFlag.HIDE_ARMOR_TRIM)) meta.addItemFlags(ItemFlag.HIDE_ARMOR_TRIM);
 
-        // Attributes
-
         for (Map.Entry<Attribute, Double> entry : item.getAttributes().entrySet()) {
             AttributeModifier modifier = new AttributeModifier(
                     UUID.nameUUIDFromBytes(("custom_attr:" + entry.getKey().name()).getBytes()),
@@ -214,11 +295,12 @@ public class AdvancedCustomItemManager {
             meta.addAttributeModifier(entry.getKey(), modifier);
         }
 
+        meta.getPersistentDataContainer().set(itemIdKey, PersistentDataType.STRING, idToStore);
+
         result.setItemMeta(meta);
         return result;
     }
 
-    // Store item ID in PDC
     public void storeItemId(ItemStack item, String id) {
         if (item == null) return;
         ItemMeta meta = item.getItemMeta();
@@ -230,5 +312,25 @@ public class AdvancedCustomItemManager {
     public String getItemId(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return null;
         return item.getItemMeta().getPersistentDataContainer().get(itemIdKey, PersistentDataType.STRING);
+    }
+
+    public AdvancedCustomItem getItemByStack(ItemStack item) {
+        String id = getItemId(item);
+        if (id == null) return null;
+        return items.get(id);
+    }
+
+    private String formatMaterialName(org.bukkit.Material mat) {
+        String name = mat.name().replace("_", " ").toLowerCase();
+        String[] words = name.split(" ");
+        StringBuilder sb = new StringBuilder();
+        for (String word : words) {
+            if (!word.isEmpty()) {
+                sb.append(Character.toUpperCase(word.charAt(0)));
+                if (word.length() > 1) sb.append(word.substring(1));
+                sb.append(" ");
+            }
+        }
+        return sb.toString().trim();
     }
 }
