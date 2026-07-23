@@ -4,10 +4,6 @@ settings:
   # Maximum max health a player can have (default: 40.0 = 20 hearts)
   max-health-cap: 40.0
 
-  # Maximum concurrent crafts per player (permission-based override)
-  max-crafts:
-    default: 5
-    op: 100
   # How many HP points each heart is worth (default: 2.0 = 1 full heart)
   heart-value: 2.0
 
@@ -17,18 +13,27 @@ settings:
   # How many HP points each half-heart item restores (default: 1.0)
   half-heart-value: 1.0
 
-  # Should players drop hearts on death?
-  drop-hearts-on-death: true
+  # OUTDATED LEAVE IT AS IS !!!!!
+  drop-hearts-on-death: false
 
   # Broadcast lifesteal events to all players
-  broadcast-lifesteal: true
+  broadcast-lifesteal: false
 
-  drop-chance: 1.0   # 1.0 = 100% chance, 0.5 = 50%, etc.
+  drop-chance: 1.0   #OUTDATED DONT USE !!!!
 
   # Sound effects
   sounds:
     heart-use: true
     heart-withdraw: true
+
+  # Death drop settings
+  death-drop:
+    enabled: true
+    item-id: "life_shard"
+    chance: 1 # 1.0 = 100% chance, 0.5 = 50%, etc.
+    drop-count: 1
+    pvp-only: true
+    min-health: 2.0
 
 messages:
   prefix: "&8[&c❤&8] &r"
@@ -45,9 +50,6 @@ messages:
   health-set-self: "&aYour max HP has been set to &c%amount%&a!"
   lifesteal-broadcast: "&c%killer% &7stole a heart from &c%victim%&7!"
 
-
-
-
 items:
   half-heart:
     material: RED_DYE
@@ -62,17 +64,9 @@ items:
 
 # Recipe Book Configuration
 recipe-book:
-  # Which inventory slot should the recipe book occupy? (0-35 for main inventory, 36-44 for hotbar)
-  # Default: 8 (hotbar slot 9, far right)
   slot: 8
-
-  # Should the recipe book be given to players on join?
   give-on-join: true
-
-  # Should the recipe book be given back on respawn?
   give-on-respawn: true
-
-  # Recipe Book Item Settings
   item:
     material: KNOWLEDGE_BOOK
     name: "&6✦ &e&lCrafting Recipe Book &6✦"
@@ -91,22 +85,13 @@ recipe-book:
 
 # Crafting System Configuration
 crafting:
-  # Maximum concurrent crafts per player
   max-concurrent-crafts: 5
-
-  # How often to check for completed crafts (in seconds)
   check-interval: 5
-
-  # Auto-remove claimed items after this many seconds
   auto-remove-claimed: 30
-
-  # GUI Settings
   gui:
     title: "&6✦ &e&lCustom Crafting Menu &6✦"
     details-title: "&6✦ &eRecipe Details &6✦"
     active-title: "&6✦ &eActive Crafts &6✦"
-
-    # Navigation Buttons
     buttons:
       previous-page:
         material: ARROW
@@ -150,8 +135,26 @@ crafting:
           - "&7Materials will be consumed"
           - "&7upon starting the craft."
           - "&7&m-------------------"
-
-    # Background filler
     filler:
       material: BLACK_STAINED_GLASS_PANE
       name: " "
+
+# Default custom items created on first startup
+default-items:
+  life_shard:
+    material: AMETHYST_SHARD
+    display-name: "&d✦ Life Shard ✦"
+    lore:
+      - "&7A fragment of the essence of life"
+      - "&7that can be used to craft"
+      - "&7Half Hearts."
+    rarity: RARE
+    category: Misc
+    flags:
+      - GLOW
+    abilities:
+      RIGHT_CLICK:
+        - ability: life_consume
+          hpAmount: 1.0
+          maxCap: 40.0
+          cooldown: 0

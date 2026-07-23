@@ -28,6 +28,9 @@ public class DrainLifeAbility extends ItemAbility {
         config.put("health", 1.0);
         config.put("affectPlayers", true);
         config.put("affectMobs", true);
+        config.put("trigger_on", "FULL_ATTACK");
+        config.put("affectPassive", true);
+        config.put("affectHostile", true);
         return config;
     }
 
@@ -38,6 +41,9 @@ public class DrainLifeAbility extends ItemAbility {
         fields.put("health", new ConfigField("Health Stolen", "double", 0.5, 20.0));
         fields.put("affectPlayers", new ConfigField("Affect Players", "boolean"));
         fields.put("affectMobs", new ConfigField("Affect Mobs", "boolean"));
+        fields.put("trigger_on", new ConfigField("Trigger On", "string"));
+        fields.put("affectPassive", new ConfigField("Affect Passive Mobs", "boolean"));
+        fields.put("affectHostile", new ConfigField("Affect Hostile Mobs", "boolean"));
         return fields;
     }
 
@@ -48,8 +54,9 @@ public class DrainLifeAbility extends ItemAbility {
         return "&7Steal &c" + formatHealth(health) + " &7on hit &8(&b" + chance + "% chance&8)";
     }
 
-    public boolean executeOnHit(Player attacker, LivingEntity victim, ItemAbilityData data,
-                                AbilityCooldownManager cooldownManager, String itemId) {
+    @Override
+    public boolean onHitExecute(Player attacker, LivingEntity victim, ItemAbilityData data,
+                                AbilityCooldownManager cooldownManager, String itemId, double baseDamage) {
         if (victim instanceof Player && !data.getConfigBoolean("affectPlayers")) return false;
         if (!(victim instanceof Player) && !data.getConfigBoolean("affectMobs")) return false;
 
@@ -68,13 +75,13 @@ public class DrainLifeAbility extends ItemAbility {
         return true;
     }
 
+    @Override
+    public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
+        return false; // ON_HIT abilities don't use execute()
+    }
+
     private String formatHealth(double health) {
         if (health == Math.floor(health)) return (int) health + "❤";
         return health + "❤";
-    }
-
-    @Override
-    public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
-        return false;
     }
 }

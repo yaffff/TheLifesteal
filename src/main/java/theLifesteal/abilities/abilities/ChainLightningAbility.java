@@ -31,6 +31,7 @@ public class ChainLightningAbility extends ItemAbility {
         config.put("maxTargets", 4);
         config.put("damage", 5.0);
         config.put("cooldown", 18);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -42,6 +43,7 @@ public class ChainLightningAbility extends ItemAbility {
         fields.put("maxTargets", new ConfigField("Max Targets", "int", 1, 10));
         fields.put("damage", new ConfigField("Damage", "double", 1.0, 50.0));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -57,9 +59,11 @@ public class ChainLightningAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -72,7 +76,6 @@ public class ChainLightningAbility extends ItemAbility {
         Location eyeLoc = player.getEyeLocation();
         Vector direction = eyeLoc.getDirection();
 
-        // Find first target
         LivingEntity firstTarget = null;
         double closestDist = initialRange;
 
@@ -94,7 +97,6 @@ public class ChainLightningAbility extends ItemAbility {
             return false;
         }
 
-        // Build chain - exclude the caster
         Set<LivingEntity> hitTargets = new HashSet<>();
         hitTargets.add(player);
         hitTargets.add(firstTarget);
@@ -112,11 +114,9 @@ public class ChainLightningAbility extends ItemAbility {
             currentTarget = nextTarget;
         }
 
-        // Sounds
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.6f, 0.5f);
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_POWER_SELECT, 0.4f, 2.0f);
 
-        // Animate arcs: player -> t1 -> t2 -> t3
         Location prevLoc = player.getEyeLocation();
         for (int i = 0; i < chainOrder.size(); i++) {
             LivingEntity target = chainOrder.get(i);
@@ -140,7 +140,10 @@ public class ChainLightningAbility extends ItemAbility {
         }
 
         player.sendMessage(ColorUtils.colorize("&b⚡ Chain Lightning hit &e" + chainOrder.size() + " &btargets!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 

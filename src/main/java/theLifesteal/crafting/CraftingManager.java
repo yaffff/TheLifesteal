@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CraftingManager {
 
@@ -22,6 +23,9 @@ public class CraftingManager {
     private File dataFile;
     private boolean saveScheduled = false;
     private boolean savingInProgress = false;
+    private final AtomicBoolean saveQueued = new AtomicBoolean(false);
+    private Map<UUID, List<CraftingProcessData>> pendingSnapshot = null;
+    private final Object saveLock = new Object();
 
     public CraftingManager(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -259,12 +263,88 @@ public class CraftingManager {
      * Schedule a save after a short delay to batch multiple changes.
      */
     private void scheduleSave() {
-        if (saveScheduled) return;
-        saveScheduled = true;
-        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            saveScheduled = false;
-            saveCraftingProcesses();
-        }, 40L); // 2 seconds
+        if (!saveQueued.compareAndSet(false, true)) return;
+
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            Map<UUID, List<CraftingProcessData>> snapshot = createSnapshot();
+
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    saveSnapshot(snapshot);
+                } finally {
+                    saveQueued.set(false);
+
+                    synchronized (saveLock) {
+                        if (pendingSnapshot != null) {
+                            Map<UUID, List<CraftingProcessData>> pending = pendingSnapshot;
+                            pendingSnapshot = null;
+                            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                                try {
+                                    saveSnapshot(pending);
+                                } catch (Exception e) {
+                                    plugin.getLogger().warning("Failed to save pending crafting data: " + e.getMessage());
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+        });
+    }
+    private Map<UUID, List<CraftingProcessData>> createSnapshot() {
+        Map<UUID, List<CraftingProcessData>> snapshot = new HashMap<>();
+
+        for (Map.Entry<UUID, List<CraftingProcess>> entry : activeProcesses.entrySet()) {
+            List<CraftingProcessData> list = new ArrayList<>();
+            for (CraftingProcess process : entry.getValue()) {
+                list.add(CraftingProcessData.fromProcess(process));
+            }
+            if (!list.isEmpty()) {
+                snapshot.put(entry.getKey(), list);
+            }
+        }
+
+        return snapshot;
+    }
+    private void saveSnapshot(Map<UUID, List<CraftingProcessData>> snapshot) {
+        if (savingInProgress) {
+            synchronized (saveLock) {
+                pendingSnapshot = snapshot;
+            }
+            return;
+        }
+
+        savingInProgress = true;
+        try {
+            YamlConfiguration config = new YamlConfiguration();
+
+            for (Map.Entry<UUID, List<CraftingProcessData>> entry : snapshot.entrySet()) {
+                List<Map<String, Object>> processList = new ArrayList<>();
+
+                for (CraftingProcessData data : entry.getValue()) {
+                    if (data.isClaimed() && System.currentTimeMillis() - data.getEndTime() > 600000) {
+                        continue;
+                    }
+
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("recipeId", data.getRecipeId());
+                    map.put("startTime", data.getStartTime());
+                    map.put("endTime", data.getEndTime());
+                    map.put("claimed", data.isClaimed());
+                    processList.add(map);
+                }
+
+                if (!processList.isEmpty()) {
+                    config.set(entry.getKey().toString(), processList);
+                }
+            }
+
+            config.save(dataFile);
+        } catch (IOException e) {
+            plugin.getLogger().warning("Failed to save crafting processes: " + e.getMessage());
+        } finally {
+            savingInProgress = false;
+        }
     }
 
     public void saveCraftingProcesses() {
@@ -346,8 +426,9 @@ public class CraftingManager {
      * Force save (used on plugin disable).
      */
     public void forceSave() {
-        saveScheduled = false;
-        saveCraftingProcesses();
+        saveQueued.set(false);
+        Map<UUID, List<CraftingProcessData>> snapshot = createSnapshot();
+        saveSnapshot(snapshot);
     }
 
     /**

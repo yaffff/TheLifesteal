@@ -40,6 +40,7 @@ public class IceStormAbility extends ItemAbility {
         config.put("stunDuration", 2);
         config.put("stunAmplifier", 5);
         config.put("cooldown", 50);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -54,6 +55,7 @@ public class IceStormAbility extends ItemAbility {
         fields.put("stunDuration", new ConfigField("Stun Duration (s)", "int", 1, 10));
         fields.put("stunAmplifier", new ConfigField("Stun Intensity (0-10)", "int", 0, 10));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -70,9 +72,11 @@ public class IceStormAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -117,7 +121,8 @@ public class IceStormAbility extends ItemAbility {
         center.getWorld().playSound(center, Sound.WEATHER_RAIN_ABOVE, 2.0f, 1.0f);
         center.getWorld().playSound(center, Sound.ENTITY_BREEZE_WIND_BURST, 1.5f, 0.5f);
 
-        for (int i = 0; i < 20; i++) {
+        // Blood sacrifice particles at player
+        for (int i = 0; i < 12; i++) {
             player.getWorld().spawnParticle(Particle.DUST,
                     player.getLocation().add(0, 1.5, 0),
                     1, 0.3, 0.5, 0.3,
@@ -131,13 +136,12 @@ public class IceStormAbility extends ItemAbility {
 
             @Override
             public void run() {
-                // Phase 1: Storm active
                 if (!cleaning && tick < totalTicks) {
                     double progress = (double) tick / totalTicks;
                     double currentRadius = radius * (0.3 + progress * 0.7);
 
-                    // Snowstorm particles
-                    for (int i = 0; i < 40; i++) {
+                    // OPTIMIZED: 15 snowflakes (was 40)
+                    for (int i = 0; i < 15; i++) {
                         double angle = Math.random() * Math.PI * 2;
                         double dist = Math.random() * currentRadius;
                         double x = Math.cos(angle) * dist;
@@ -147,26 +151,26 @@ public class IceStormAbility extends ItemAbility {
                                 center.clone().add(x, y, z), 1, 0, 0, 0, 0.05);
                     }
 
-                    // Wind swirl
-                    for (int i = 0; i < 20; i++) {
-                        double angle = (tick * 0.3) + (i * Math.PI * 2 / 20);
+                    // OPTIMIZED: 8 wind swirl (was 20)
+                    for (int i = 0; i < 8; i++) {
+                        double angle = (tick * 0.3) + (i * Math.PI * 2 / 8);
                         double dist = currentRadius * 0.8;
                         double x = Math.cos(angle) * dist;
                         double z = Math.sin(angle) * dist;
-                        double y = 1 + Math.random() * 6;
+                        double y = 1 + Math.random() * 4;
                         center.getWorld().spawnParticle(Particle.CLOUD,
-                                center.clone().add(x, y, z), 1, 0, 0, 0, 0.02);
+                                center.clone().add(x, y, z), 1, 0, 0, 0, 0.03);
                     }
 
-                    // Ground frost
-                    for (int i = 0; i < 15; i++) {
+                    // OPTIMIZED: 6 ground frost (was 15), use BLOCK ice data for impact
+                    for (int i = 0; i < 6; i++) {
                         double angle = Math.random() * Math.PI * 2;
                         double dist = Math.random() * currentRadius;
                         double x = Math.cos(angle) * dist;
                         double z = Math.sin(angle) * dist;
-                        center.getWorld().spawnParticle(Particle.DUST,
+                        center.getWorld().spawnParticle(Particle.BLOCK,
                                 center.clone().add(x, 0.1, z), 1, 0, 0, 0,
-                                new Particle.DustOptions(org.bukkit.Color.fromRGB(200, 220, 255), 1.5f));
+                                Material.ICE.createBlockData());
                     }
 
                     // Drop ice blocks in waves
@@ -189,15 +193,16 @@ public class IceStormAbility extends ItemAbility {
                                 public void run() {
                                     if (iceBlock.isDead() || !iceBlock.isValid() || iceBlock.isOnGround()) {
                                         iceBlock.getWorld().spawnParticle(Particle.BLOCK,
-                                                iceBlock.getLocation(), 20, 0.5, 0.5, 0.5,
+                                                iceBlock.getLocation(), 10, 0.3, 0.3, 0.3,
                                                 Material.ICE.createBlockData());
                                         iceBlock.getWorld().playSound(iceBlock.getLocation(), Sound.BLOCK_GLASS_BREAK, 0.8f, 1.0f);
                                         iceBlock.remove();
                                         this.cancel();
                                         return;
                                     }
+                                    // OPTIMIZED: 1 snowflake trailing (was 3)
                                     iceBlock.getWorld().spawnParticle(Particle.SNOWFLAKE,
-                                            iceBlock.getLocation(), 3, 0.3, 0.3, 0.3, 0.02);
+                                            iceBlock.getLocation(), 1, 0.2, 0.2, 0.2, 0.03);
                                 }
                             }.runTaskTimer(getPlugin(), 0L, 2L);
                         }
@@ -219,7 +224,7 @@ public class IceStormAbility extends ItemAbility {
                             if (tick % 10 == 0) {
                                 target.getWorld().spawnParticle(Particle.SNOWFLAKE,
                                         target.getLocation().add(0, 1.5, 0),
-                                        10, 0.3, 0.5, 0.3, 0.03);
+                                        5, 0.3, 0.5, 0.3, 0.03);
                             }
                         }
                     }
@@ -235,7 +240,6 @@ public class IceStormAbility extends ItemAbility {
                     return;
                 }
 
-                // Phase 2: Let final ice blocks fall, then clean up
                 if (cleaning) {
                     cleanTick++;
                     if (cleanTick >= 30) {
@@ -251,7 +255,8 @@ public class IceStormAbility extends ItemAbility {
                                 }
                             }
                         }
-                        center.getWorld().spawnParticle(Particle.SNOWFLAKE, center, 50, radius, 3, radius, 0.1);
+                        // OPTIMIZED: 30 snowflakes cleanup (was 50)
+                        center.getWorld().spawnParticle(Particle.SNOWFLAKE, center, 30, radius, 3, radius, 0.1);
                         center.getWorld().playSound(center, Sound.BLOCK_GLASS_BREAK, 2.0f, 0.5f);
                         this.cancel();
                     }
@@ -260,7 +265,10 @@ public class IceStormAbility extends ItemAbility {
         }.runTaskTimer(getPlugin(), 0L, 1L);
 
         player.sendMessage(ColorUtils.colorize("&b❄ Ice Storm unleashed!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 

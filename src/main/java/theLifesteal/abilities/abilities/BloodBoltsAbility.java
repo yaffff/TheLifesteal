@@ -39,6 +39,7 @@ public class BloodBoltsAbility extends ItemAbility {
         config.put("damage", 3.0);
         config.put("selfDamage", 2.0);
         config.put("cooldown", 20);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -51,6 +52,7 @@ public class BloodBoltsAbility extends ItemAbility {
         fields.put("damage", new ConfigField("Damage per Bolt", "double", 1.0, 20.0));
         fields.put("selfDamage", new ConfigField("Self Damage", "double", 0.0, 20.0));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -66,16 +68,17 @@ public class BloodBoltsAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
 
         UUID uuid = player.getUniqueId();
 
-        // If already bursting from a previous right-click, ignore
         if (burstSessions.containsKey(uuid)) return true;
 
         int totalProjectiles = data.getConfigInt("projectiles");
@@ -84,13 +87,11 @@ public class BloodBoltsAbility extends ItemAbility {
         double damage = data.getConfigDouble("damage");
         double selfDamage = data.getConfigDouble("selfDamage");
 
-        // Self damage
         if (selfDamage > 0) {
             double newHealth = Math.max(1.0, player.getHealth() - selfDamage);
             player.setHealth(newHealth);
         }
 
-        // Blood sacrifice particles
         for (int i = 0; i < 20; i++) {
             player.getWorld().spawnParticle(Particle.DUST,
                     player.getLocation().add(0, 1.5, 0),
@@ -109,7 +110,6 @@ public class BloodBoltsAbility extends ItemAbility {
 
             @Override
             public void run() {
-                // Check if player swapped item
                 boolean holding = false;
                 if (player.getInventory().getItemInMainHand() != null &&
                         player.getInventory().getItemInMainHand().hasItemMeta() &&
@@ -131,10 +131,8 @@ public class BloodBoltsAbility extends ItemAbility {
                     return;
                 }
 
-                // Fire one bolt straight ahead with slight random offset
                 Location start = player.getEyeLocation();
                 Vector direction = start.getDirection().normalize();
-                // Tiny random spread per shot
                 direction.add(new Vector(
                         (Math.random() - 0.5) * 0.15,
                         (Math.random() - 0.5) * 0.1,
@@ -151,7 +149,10 @@ public class BloodBoltsAbility extends ItemAbility {
         session.task = task;
 
         player.sendMessage(ColorUtils.colorize("&c🩸 Firing blood bolts!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 
@@ -170,12 +171,10 @@ public class BloodBoltsAbility extends ItemAbility {
                 current.add(direction.clone().multiply(1.5));
                 traveled += 1.5;
 
-                // Single small particle at center
                 current.getWorld().spawnParticle(Particle.DUST,
                         current, 1, 0, 0, 0,
                         new Particle.DustOptions(org.bukkit.Color.fromRGB(220, 30, 30), 1f));
 
-                // Hit
                 for (Entity entity : current.getWorld().getNearbyEntities(current, 0.6, 0.6, 0.6)) {
                     if (!(entity instanceof LivingEntity) || entity == player) continue;
                     LivingEntity target = (LivingEntity) entity;

@@ -11,7 +11,7 @@ public class ItemAbilityManager {
 
     private final JavaPlugin plugin;
     private final AbilityCooldownManager cooldownManager;
-    private final Map<String, ItemAbility> registeredAbilities; // id -> ability
+    private final Map<String, ItemAbility> registeredAbilities;
 
     public ItemAbilityManager(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -43,7 +43,6 @@ public class ItemAbilityManager {
 
     private boolean canGoInSlot(ItemAbilityType abilityType, ItemAbilityType slotType) {
         if (abilityType == slotType) return true;
-        // RIGHT_CLICK and SHIFT_RIGHT_CLICK are interchangeable
         if (abilityType == ItemAbilityType.RIGHT_CLICK && slotType == ItemAbilityType.SHIFT_RIGHT_CLICK) return true;
         if (abilityType == ItemAbilityType.SHIFT_RIGHT_CLICK && slotType == ItemAbilityType.RIGHT_CLICK) return true;
         return false;
@@ -74,9 +73,7 @@ public class ItemAbilityManager {
             for (ItemAbilityData data : dataList) {
                 ItemAbility ability = getAbility(data.getAbilityId());
                 if (ability != null) {
-                    // First line: prefix + ability name
                     lore.add(ColorUtils.colorize(type.getLorePrefix() + "&f" + ability.getDisplayName()));
-                    // Subsequent lines: the lore description
                     String loreText = ability.buildLore(data);
                     String[] lines = loreText.split("\n");
                     for (String line : lines) {
@@ -91,6 +88,7 @@ public class ItemAbilityManager {
 
     /**
      * Execute a right-click ability.
+     * Returns true if the ability triggered successfully.
      */
     public boolean executeRightClick(Player player, String itemId, Map<ItemAbilityType, List<ItemAbilityData>> abilityMap) {
         List<ItemAbilityData> abilities = abilityMap.get(ItemAbilityType.RIGHT_CLICK);
@@ -105,6 +103,7 @@ public class ItemAbilityManager {
 
     /**
      * Execute a shift-right-click ability.
+     * Returns true if the ability triggered successfully.
      */
     public boolean executeShiftRightClick(Player player, String itemId, Map<ItemAbilityType, List<ItemAbilityData>> abilityMap) {
         List<ItemAbilityData> abilities = abilityMap.get(ItemAbilityType.SHIFT_RIGHT_CLICK);
@@ -119,8 +118,10 @@ public class ItemAbilityManager {
 
     /**
      * Execute all on-hit abilities.
+     * Each ability handles its own logic via onHitExecute().
      */
-    public void executeOnHit(Player attacker, LivingEntity victim, String itemId, Map<ItemAbilityType, List<ItemAbilityData>> abilityMap, double baseDamage) {
+    public void executeOnHit(Player attacker, LivingEntity victim, String itemId,
+                             Map<ItemAbilityType, List<ItemAbilityData>> abilityMap, double baseDamage) {
         List<ItemAbilityData> abilities = abilityMap.get(ItemAbilityType.ON_HIT);
         if (abilities == null) return;
 
@@ -128,22 +129,10 @@ public class ItemAbilityManager {
             ItemAbility ability = getAbility(data.getAbilityId());
             if (ability == null) continue;
 
-            if (ability instanceof theLifesteal.abilities.abilities.FreezingStrikeAbility) {
-                ((theLifesteal.abilities.abilities.FreezingStrikeAbility) ability).executeOnHit(attacker, victim, data, cooldownManager, itemId);
-            } else if (ability instanceof theLifesteal.abilities.abilities.CriticalStrikeAbility) {
-                ((theLifesteal.abilities.abilities.CriticalStrikeAbility) ability).executeOnHit(attacker, victim, data, cooldownManager, itemId, baseDamage);
-            } else if (ability instanceof theLifesteal.abilities.abilities.DrainLifeAbility) {
-                ((theLifesteal.abilities.abilities.DrainLifeAbility) ability).executeOnHit(attacker, victim, data, cooldownManager, itemId);
-            } else if (ability instanceof theLifesteal.abilities.abilities.PoisonStrikeAbility) {
-                ((theLifesteal.abilities.abilities.PoisonStrikeAbility) ability).executeOnHit(attacker, victim, data, cooldownManager, itemId);
-            } else if (ability instanceof theLifesteal.abilities.abilities.BerserkAbility) {
-                ((theLifesteal.abilities.abilities.BerserkAbility) ability).executeOnHit(attacker, victim, data, cooldownManager, itemId, baseDamage);
-            } else {
-                ability.execute(attacker, data, cooldownManager, itemId);
-            }
-
+            ability.onHitExecute(attacker, victim, data, cooldownManager, itemId, baseDamage);
         }
     }
+
     /**
      * Serialize ability map to YML-compatible structure.
      */

@@ -43,6 +43,9 @@ public class CriticalStrikeAbility extends ItemAbility {
         config.put("resetTime", 8);
         config.put("affectPlayers", true);
         config.put("affectMobs", true);
+        config.put("trigger_on", "FULL_ATTACK");
+        config.put("affectPassive", true);
+        config.put("affectHostile", true);
         return config;
     }
 
@@ -54,6 +57,9 @@ public class CriticalStrikeAbility extends ItemAbility {
         fields.put("resetTime", new ConfigField("Reset After (seconds)", "int", 3, 60));
         fields.put("affectPlayers", new ConfigField("Affect Players", "boolean"));
         fields.put("affectMobs", new ConfigField("Affect Mobs", "boolean"));
+        fields.put("trigger_on", new ConfigField("Trigger On", "string"));
+        fields.put("affectPassive", new ConfigField("Affect Passive Mobs", "boolean"));
+        fields.put("affectHostile", new ConfigField("Affect Hostile Mobs", "boolean"));
         return fields;
     }
 
@@ -65,7 +71,8 @@ public class CriticalStrikeAbility extends ItemAbility {
         return "&7Every &e" + interval + getSuffix(interval) + " &7hit deals &c" + String.format("%.1f", multiplier) + "x damage\n&7Resets after &e" + resetTime + "s &7of no hits";
     }
 
-    public boolean executeOnHit(Player attacker, LivingEntity victim, ItemAbilityData data,
+    @Override
+    public boolean onHitExecute(Player attacker, LivingEntity victim, ItemAbilityData data,
                                 AbilityCooldownManager cooldownManager, String itemId, double baseDamage) {
         // Prevent recursive infinite damage loop
         if (processingDamage.contains(victim.getUniqueId())) return false;
@@ -92,7 +99,6 @@ public class CriticalStrikeAbility extends ItemAbility {
         final long hitTime = System.currentTimeMillis();
         BukkitTask task = Bukkit.getScheduler().runTaskLater(getPlugin(), () -> {
             if (!lastHitTime.containsKey(uuid)) return;
-            // Only reset if no new hits happened since this task was scheduled
             if (lastHitTime.get(uuid) <= hitTime) {
                 hitCounters.put(uuid, 0);
                 Player p = Bukkit.getPlayer(uuid);
@@ -115,13 +121,11 @@ public class CriticalStrikeAbility extends ItemAbility {
 
         // Check if this hit should crit
         if (currentHit >= hitInterval) {
-            // Mark as processing to prevent recursion
             processingDamage.add(victim.getUniqueId());
 
             double bonusDamage = baseDamage * (multiplier - 1.0);
             victim.damage(bonusDamage, attacker);
 
-            // Crit effects
             victim.getWorld().spawnParticle(Particle.ENCHANTED_HIT,
                     victim.getLocation().add(0, 1.5, 0), 25, 0.4, 0.8, 0.4, 0.1);
             victim.getWorld().spawnParticle(Particle.CRIT,
@@ -131,13 +135,11 @@ public class CriticalStrikeAbility extends ItemAbility {
 
             attacker.sendMessage(ColorUtils.colorize("&c⚔ Critical Strike! &7(" + String.format("%.1f", multiplier) + "x damage)"));
 
-            // Reset counter
             hitCounters.put(uuid, 0);
             updateBossBar(attacker, 0, hitInterval);
             removeBossBar(attacker);
             cancelResetTask(uuid);
 
-            // Remove from processing set after 1 tick
             final UUID victimId = victim.getUniqueId();
             Bukkit.getScheduler().runTaskLater(getPlugin(), () -> processingDamage.remove(victimId), 1L);
         }
@@ -214,6 +216,6 @@ public class CriticalStrikeAbility extends ItemAbility {
 
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
-        return false;
+        return false; // ON_HIT abilities don't use execute()
     }
 }

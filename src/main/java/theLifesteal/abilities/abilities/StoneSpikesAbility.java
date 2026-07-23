@@ -35,6 +35,7 @@ public class StoneSpikesAbility extends ItemAbility {
         config.put("damage", 4.0);
         config.put("launchPower", 0.6);
         config.put("cooldown", 15);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -47,6 +48,7 @@ public class StoneSpikesAbility extends ItemAbility {
         fields.put("damage", new ConfigField("Damage", "double", 0.5, 50.0));
         fields.put("launchPower", new ConfigField("Launch Power", "double", 0.1, 2.0));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -62,9 +64,11 @@ public class StoneSpikesAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -145,7 +149,6 @@ public class StoneSpikesAbility extends ItemAbility {
                         }
                     }.runTaskLater(getPlugin(), 25L);
 
-                    // Heavy emergence particles
                     Location particleLoc = groundLoc.clone().add(0, 0.5, 0);
                     final Location finalParticleLoc = particleLoc.clone();
 
@@ -159,7 +162,6 @@ public class StoneSpikesAbility extends ItemAbility {
                     groundLoc.getWorld().spawnParticle(Particle.CLOUD,
                             particleLoc, 8, 0.3, 0.2, 0.3, 0.05);
 
-                    // Persistent rumble particles
                     new BukkitRunnable() {
                         int ticks = 0;
 
@@ -186,7 +188,6 @@ public class StoneSpikesAbility extends ItemAbility {
                         }
                     }.runTaskTimer(getPlugin(), 0L, 1L);
 
-                    // Check for entity hits
                     for (Entity entity : groundLoc.getWorld().getNearbyEntities(groundLoc, 1.5, 2.5, 1.5)) {
                         if (entity instanceof LivingEntity && entity != player && !hitEntities.contains(entity)) {
                             hitEntities.add(entity);
@@ -212,7 +213,6 @@ public class StoneSpikesAbility extends ItemAbility {
             }
         }
 
-        // Ground rumble at player's feet
         for (int i = 0; i < 15; i++) {
             player.getWorld().spawnParticle(Particle.CLOUD,
                     start.clone().add(
@@ -223,7 +223,10 @@ public class StoneSpikesAbility extends ItemAbility {
         }
 
         player.sendMessage(ColorUtils.colorize("&7🪨 Stone Spikes erupted!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 

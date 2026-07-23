@@ -31,6 +31,9 @@ public class FreezingStrikeAbility extends ItemAbility {
         config.put("duration", 3);
         config.put("affectPlayers", true);
         config.put("affectMobs", true);
+        config.put("trigger_on", "FULL_ATTACK");
+        config.put("affectPassive", true);
+        config.put("affectHostile", true);
         return config;
     }
 
@@ -41,7 +44,10 @@ public class FreezingStrikeAbility extends ItemAbility {
         fields.put("slownessAmplifier", new ConfigField("Freeze Intensity (0-10)", "int", 0, 10));
         fields.put("duration", new ConfigField("Freeze Duration (seconds)", "int", 1, 30));
         fields.put("affectPlayers", new ConfigField("Affect Players", "boolean"));
-        fields.put("affectMobs", new ConfigField("Affect Mobs", "boolean"));
+        fields.put("affectMobs", new ConfigField("Affect Mobs", "boolean"));fields.put("trigger_on", new ConfigField("Trigger On", "string"));
+        fields.put("affectPassive", new ConfigField("Affect Passive Mobs", "boolean"));
+        fields.put("affectHostile", new ConfigField("Affect Hostile Mobs", "boolean"));
+
         return fields;
     }
 
@@ -52,8 +58,9 @@ public class FreezingStrikeAbility extends ItemAbility {
         return "&7Freeze target on hit &8(&b" + chance + "% chance&7, &3" + duration + "s&8)";
     }
 
-    public boolean executeOnHit(Player attacker, LivingEntity victim, ItemAbilityData data,
-                                AbilityCooldownManager cooldownManager, String itemId) {
+    @Override
+    public boolean onHitExecute(Player attacker, LivingEntity victim, ItemAbilityData data,
+                                AbilityCooldownManager cooldownManager, String itemId, double baseDamage) {
         if (victim instanceof Player && !data.getConfigBoolean("affectPlayers")) return false;
         if (!(victim instanceof Player) && !data.getConfigBoolean("affectMobs")) return false;
 
@@ -95,6 +102,6 @@ public class FreezingStrikeAbility extends ItemAbility {
 
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
-        return false;
+        return false; // ON_HIT abilities don't use execute()
     }
 }

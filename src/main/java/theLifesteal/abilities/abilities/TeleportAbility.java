@@ -27,6 +27,7 @@ public class TeleportAbility extends ItemAbility {
         config.put("maxDistance", 20);
         config.put("cooldown", 15);
         config.put("passThrough", false);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -36,6 +37,7 @@ public class TeleportAbility extends ItemAbility {
         fields.put("maxDistance", new ConfigField("Max Distance", "int", 1, 100));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
         fields.put("passThrough", new ConfigField("Pass Through Walls", "boolean"));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -51,9 +53,11 @@ public class TeleportAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -83,7 +87,6 @@ public class TeleportAbility extends ItemAbility {
             return false;
         }
 
-        // Particles at start
         spawnTeleportParticles(player.getLocation());
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.8f);
 
@@ -91,12 +94,14 @@ public class TeleportAbility extends ItemAbility {
         destination.setPitch(player.getLocation().getPitch());
         player.teleport(destination);
 
-        // Particles at destination
         spawnTeleportParticles(destination);
         player.getWorld().playSound(destination, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.2f);
 
         player.sendMessage(ColorUtils.colorize("&5✦ Teleported " + String.format("%.1f", start.distance(destination)) + " blocks!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 

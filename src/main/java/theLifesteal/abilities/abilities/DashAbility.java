@@ -7,8 +7,6 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 import theLifesteal.ColorUtils;
 import theLifesteal.abilities.AbilityCooldownManager;
@@ -31,6 +29,7 @@ public class DashAbility extends ItemAbility {
         config.put("distance", 8);
         config.put("damage", 5.0);
         config.put("cooldown", 15);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -40,6 +39,7 @@ public class DashAbility extends ItemAbility {
         fields.put("distance", new ConfigField("Dash Distance", "int", 1, 50));
         fields.put("damage", new ConfigField("Damage", "double", 0.0, 100.0));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -54,9 +54,11 @@ public class DashAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -99,7 +101,10 @@ public class DashAbility extends ItemAbility {
         }, 2L);
 
         player.sendMessage(ColorUtils.colorize("&b💨 Dashed forward!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 

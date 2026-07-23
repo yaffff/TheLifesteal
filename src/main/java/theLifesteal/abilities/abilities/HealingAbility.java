@@ -25,6 +25,7 @@ public class HealingAbility extends ItemAbility {
         Map<String, Object> config = new LinkedHashMap<>();
         config.put("health", 4.0);
         config.put("cooldown", 30);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -33,6 +34,7 @@ public class HealingAbility extends ItemAbility {
         Map<String, ConfigField> fields = new LinkedHashMap<>();
         fields.put("health", new ConfigField("Health Restored", "double", 0.5, 100.0));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -46,9 +48,11 @@ public class HealingAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -62,7 +66,10 @@ public class HealingAbility extends ItemAbility {
         player.getWorld().spawnParticle(Particle.HEART, player.getLocation().add(0, 1.5, 0), 7, 0.5, 0.5, 0.5, 0.1);
 
         player.sendMessage(ColorUtils.colorize("&a❤ Healed for &c" + formatHealth(health) + "&a!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 

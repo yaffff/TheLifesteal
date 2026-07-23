@@ -86,9 +86,19 @@ public class ItemLoreBuilder {
         List<String> lore = new ArrayList<>();
         boolean hasContent = false;
 
+        // 0. CONSUMABLE warning (NEW - shown at top if flag is set)
+        if (item.hasFlag(CustomItemFlag.CONSUMABLE)) {
+            lore.add(ColorUtils.colorize("&c⚠ &4&lCONSUMABLE &c⚠"));
+            lore.add(ColorUtils.colorize("&7This item will be destroyed"));
+            lore.add(ColorUtils.colorize("&7after a successful ability use."));
+            lore.add("");
+            hasContent = true;
+        }
+
         // 1. Enchantments section
         List<String> enchantLines = buildEnchantLines(item);
         if (!enchantLines.isEmpty()) {
+            if (hasContent) lore.add("");
             lore.addAll(enchantLines);
             hasContent = true;
         }

@@ -30,6 +30,7 @@ public class GravityPullAbility extends ItemAbility {
         config.put("pullStrength", 2.0);
         config.put("coneAngle", 40);
         config.put("cooldown", 20);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -40,6 +41,7 @@ public class GravityPullAbility extends ItemAbility {
         fields.put("pullStrength", new ConfigField("Pull Strength", "double", 0.5, 10.0));
         fields.put("coneAngle", new ConfigField("Cone Angle (degrees)", "int", 10, 90));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -54,9 +56,11 @@ public class GravityPullAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -93,7 +97,6 @@ public class GravityPullAbility extends ItemAbility {
 
             entity.setVelocity(velocity);
 
-            // Pull particles along the line
             for (int i = 0; i < 15; i++) {
                 double progress = (double) i / 15;
                 Location particleLoc = entityLoc.clone().add(
@@ -105,7 +108,6 @@ public class GravityPullAbility extends ItemAbility {
                         particleLoc, 1, 0.1, 0.1, 0.1, 0);
             }
 
-            // Particles on target
             for (int i = 0; i < 5; i++) {
                 entity.getWorld().spawnParticle(Particle.DUST,
                         entityLoc.clone().add(0, 1, 0),
@@ -132,7 +134,10 @@ public class GravityPullAbility extends ItemAbility {
             }
 
             player.sendMessage(ColorUtils.colorize("&5🕳 Pulled &d" + pulled + " &5targets!"));
-            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+            if (cooldown > 0) {
+                cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+            }
             return true;
         } else {
             player.sendMessage(ColorUtils.colorize("&7No targets in range."));

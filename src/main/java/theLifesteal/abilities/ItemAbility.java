@@ -1,5 +1,6 @@
 package theLifesteal.abilities;
 
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import java.util.List;
@@ -43,9 +44,28 @@ public abstract class ItemAbility {
     public abstract String buildLore(ItemAbilityData data);
 
     /**
-     * Execute the ability. Return true if successful (cooldown should be applied).
+     * Execute the ability for right-click or shift-right-click.
+     * Return true if successful (cooldown should be applied, item can be consumed).
      */
     public abstract boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId);
+
+    /**
+     * Execute the ability when the player hits an entity (ON_HIT type).
+     * Override this in your ON_HIT ability to add custom behavior.
+     *
+     * @param attacker The player who hit
+     * @param victim The entity that was hit
+     * @param data The ability's config data
+     * @param cooldownManager The cooldown manager
+     * @param itemId The custom item ID
+     * @param baseDamage The original damage of the hit
+     * @return true if the ability triggered (for consumption logic)
+     */
+    public boolean onHitExecute(Player attacker, LivingEntity victim, ItemAbilityData data,
+                                AbilityCooldownManager cooldownManager, String itemId, double baseDamage) {
+        // Default: do nothing. ON_HIT abilities override this.
+        return false;
+    }
 
     public static class ConfigField {
         private final String displayName;

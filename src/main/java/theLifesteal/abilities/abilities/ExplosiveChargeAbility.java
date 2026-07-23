@@ -11,6 +11,9 @@ import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -26,13 +29,16 @@ import theLifesteal.abilities.ItemAbilityType;
 
 import java.util.*;
 
-public class ExplosiveChargeAbility extends ItemAbility {
+public class ExplosiveChargeAbility extends ItemAbility implements Listener {
 
     private final Map<UUID, ChargeSession> chargeSessions;
+    private final Map<UUID, Location> chargePositions;
 
     public ExplosiveChargeAbility(JavaPlugin plugin) {
         super(plugin, "explosive_charge", "Explosive Charge", ItemAbilityType.RIGHT_CLICK);
         this.chargeSessions = new HashMap<>();
+        this.chargePositions = new HashMap<>();
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @Override
@@ -45,6 +51,7 @@ public class ExplosiveChargeAbility extends ItemAbility {
         config.put("blindnessDuration", 3);
         config.put("selfDamage", false);
         config.put("cooldown", 45);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -58,6 +65,7 @@ public class ExplosiveChargeAbility extends ItemAbility {
         fields.put("blindnessDuration", new ConfigField("Blindness Duration (s)", "int", 0, 10));
         fields.put("selfDamage", new ConfigField("Self Damage", "boolean"));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -73,9 +81,11 @@ public class ExplosiveChargeAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -94,6 +104,7 @@ public class ExplosiveChargeAbility extends ItemAbility {
         int totalTicks = chargeTime * 20;
 
         final Location chargeLocation = player.getLocation().clone();
+        chargePositions.put(uuid, chargeLocation);
         player.setWalkSpeed(0f);
         player.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST, totalTicks + 40, -10, false, false, false));
 
@@ -123,25 +134,6 @@ public class ExplosiveChargeAbility extends ItemAbility {
                     return;
                 }
 
-                // Lock player to charge position
-                if (!player.getLocation().getBlock().equals(chargeLocation.getBlock())) {
-                    Location currentLoc = player.getLocation().clone();
-                    currentLoc.setX(chargeLocation.getX());
-                    currentLoc.setZ(chargeLocation.getZ());
-                    if (currentLoc.getY() < chargeLocation.getY()) {
-                        currentLoc.setY(chargeLocation.getY());
-                    }
-                    currentLoc.setYaw(player.getLocation().getYaw());
-                    currentLoc.setPitch(player.getLocation().getPitch());
-                    player.teleport(currentLoc);
-                }
-
-                // Block any velocity
-                if (player.getVelocity().length() > 0.01) {
-                    player.setVelocity(new Vector(0, 0, 0));
-                }
-
-                // Check if holding the custom item
                 boolean holdingItem = false;
                 if (player.getInventory().getItemInMainHand() != null &&
                         player.getInventory().getItemInMainHand().hasItemMeta() &&
@@ -169,8 +161,8 @@ public class ExplosiveChargeAbility extends ItemAbility {
                 if (tick >= totalTicks) {
                     bossBar.removeAll();
                     chargeSessions.remove(uuid);
-                    explode(player, maxDamage, explosionRadius, knockbackPower, blindnessDuration, selfDamage,
-                            cooldownManager, itemId, cooldown);
+                    chargePositions.remove(uuid);
+                    explode(player, maxDamage, explosionRadius, knockbackPower, blindnessDuration, selfDamage);
                     resetPlayer(player);
                     this.cancel();
                     return;
@@ -205,12 +197,12 @@ public class ExplosiveChargeAbility extends ItemAbility {
                     color = org.bukkit.Color.fromRGB(255, (int)(255 - p * 155), (int)(255 - p * 155));
                 }
 
-                int particleCount = 2 + (int)(progress * 15);
+                // OPTIMIZED PARTICLES: 3 orbiting + 2 sparks
                 double orbitRadius = 1.0 + progress * 1.2;
                 double orbitSpeed = 0.3 + progress * 3.0;
 
-                for (int i = 0; i < particleCount; i++) {
-                    double angle = (tick * orbitSpeed * 0.3 + i * Math.PI * 2 / particleCount);
+                for (int i = 0; i < 3; i++) {
+                    double angle = (tick * orbitSpeed * 0.3 + i * Math.PI * 2 / 3);
                     double x = Math.cos(angle) * orbitRadius;
                     double z = Math.sin(angle) * orbitRadius;
                     double y = Math.sin(tick * 0.3 + i) * 0.5;
@@ -218,15 +210,16 @@ public class ExplosiveChargeAbility extends ItemAbility {
                     loc.getWorld().spawnParticle(Particle.DUST,
                             loc.clone().add(x, y, z),
                             1, 0, 0, 0,
-                            new Particle.DustOptions(color, 1.5f + (float)progress));
+                            new Particle.DustOptions(color, 2f + (float)progress));
                 }
 
-                for (int i = 0; i < 3 + (int)(progress * 8); i++) {
-                    double angle = Math.random() * Math.PI * 2;
-                    double radius = Math.random() * 0.6;
-                    loc.getWorld().spawnParticle(Particle.DUST,
-                            loc.clone().add(Math.cos(angle) * radius, Math.random() * 1.5, Math.sin(angle) * radius),
-                            1, 0, 0, 0, new Particle.DustOptions(color, 1f));
+                for (int i = 0; i < 2; i++) {
+                    loc.getWorld().spawnParticle(Particle.ELECTRIC_SPARK,
+                            loc.clone().add(
+                                    (Math.random() - 0.5) * 1.2,
+                                    Math.random() * 1.5,
+                                    (Math.random() - 0.5) * 1.2),
+                            1, 0, 0, 0, 0);
                 }
 
                 if (tick % 20 == 0 && progress < 0.5) {
@@ -243,7 +236,31 @@ public class ExplosiveChargeAbility extends ItemAbility {
         session.task = task;
         session.bossBar = bossBar;
 
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
+    }
+
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        Location anchor = chargePositions.get(uuid);
+
+        if (anchor == null) return;
+
+        Location to = event.getTo();
+        Location from = event.getFrom();
+
+        boolean movedX = to.getX() != from.getX();
+        boolean movedZ = to.getZ() != from.getZ();
+
+        if (movedX || movedZ) {
+            Location corrected = from.clone();
+            corrected.setYaw(to.getYaw());
+            corrected.setPitch(to.getPitch());
+            event.setTo(corrected);
+        }
     }
 
     private void cancelCharge(Player player, BossBar bossBar) {
@@ -255,30 +272,29 @@ public class ExplosiveChargeAbility extends ItemAbility {
         if (bossBar != null) {
             bossBar.removeAll();
         }
+        chargePositions.remove(uuid);
         resetPlayer(player);
     }
 
     private void explode(Player player, double damage, int radius, double knockbackPower,
-                         int blindnessDuration, boolean selfDamage, AbilityCooldownManager cooldownManager,
-                         String itemId, int cooldown) {
+                         int blindnessDuration, boolean selfDamage) {
         Location center = player.getLocation();
 
         player.getWorld().playSound(center, Sound.ENTITY_GENERIC_EXPLODE, 2.0f, 0.5f);
         player.getWorld().playSound(center, Sound.ENTITY_DRAGON_FIREBALL_EXPLODE, 1.5f, 0.3f);
 
-        player.getWorld().spawnParticle(Particle.EXPLOSION, center.add(0, 1, 0), 5, 1, 1, 1, 0.2);
+        player.getWorld().spawnParticle(Particle.EXPLOSION, center.add(0, 1, 0), 3, 1, 1, 1, 0.2);
 
-        for (int ring = 0; ring < 4; ring++) {
-            double ringR = ring * 2.0;
-            for (int i = 0; i < 48; i++) {
-                double angle = i * Math.PI * 2 / 48;
+        // OPTIMIZED: Single shockwave — 24 angles × 3 rings = 72 particles (was 192)
+        for (int i = 0; i < 24; i++) {
+            double angle = i * Math.PI * 2 / 24;
+            for (int ring = 0; ring < 3; ring++) {
+                double ringR = ring * 2.5;
                 double x = Math.cos(angle) * ringR;
                 double z = Math.sin(angle) * ringR;
                 center.getWorld().spawnParticle(Particle.DUST,
                         center.clone().add(x, 0.2, z), 1, 0, 0, 0,
-                        new Particle.DustOptions(
-                                ring < 2 ? org.bukkit.Color.fromRGB(255, 200, 50) : org.bukkit.Color.fromRGB(255, 100, 30),
-                                2f));
+                        new Particle.DustOptions(org.bukkit.Color.fromRGB(255, 160, 40), 3f));
             }
         }
 
@@ -307,22 +323,22 @@ public class ExplosiveChargeAbility extends ItemAbility {
             player.damage(damage * 0.3);
         }
 
+        // OPTIMIZED: 5 smoke every 3 ticks for 30 ticks (was 10 every 2 ticks for 40)
         new BukkitRunnable() {
             int t = 0;
             @Override
             public void run() {
-                if (t >= 40) { this.cancel(); return; }
-                for (int i = 0; i < 10; i++) {
+                if (t >= 30) { this.cancel(); return; }
+                for (int i = 0; i < 5; i++) {
                     center.getWorld().spawnParticle(Particle.CLOUD,
-                            center.clone().add(Math.random() * radius * 0.6 - radius * 0.3, Math.random() * 3, Math.random() * radius * 0.6 - radius * 0.3),
-                            1, 0, 0, 0, 0.02);
+                            center.clone().add(Math.random() * radius * 0.5 - radius * 0.25, Math.random() * 2, Math.random() * radius * 0.5 - radius * 0.25),
+                            1, 0, 0, 0, 0.03);
                 }
                 t++;
             }
-        }.runTaskTimer(getPlugin(), 0L, 2L);
+        }.runTaskTimer(getPlugin(), 0L, 3L);
 
         player.sendMessage(ColorUtils.colorize("&c💥 BOOM!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
     }
 
     private void resetPlayer(Player player) {
@@ -336,6 +352,7 @@ public class ExplosiveChargeAbility extends ItemAbility {
             if (session.task != null) session.task.cancel();
             if (session.bossBar != null) session.bossBar.removeAll();
         }
+        chargePositions.remove(uuid);
     }
 
     private static class ChargeSession {

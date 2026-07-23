@@ -30,6 +30,7 @@ public class AirSlashAbility extends ItemAbility {
         config.put("arcWidth", 3);
         config.put("damage", 6.0);
         config.put("cooldown", 12);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -40,6 +41,7 @@ public class AirSlashAbility extends ItemAbility {
         fields.put("arcWidth", new ConfigField("Arc Width", "int", 1, 8));
         fields.put("damage", new ConfigField("Damage", "double", 1.0, 50.0));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -55,9 +57,11 @@ public class AirSlashAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -86,13 +90,11 @@ public class AirSlashAbility extends ItemAbility {
 
                 Location current = start.clone().add(direction.clone().multiply(traveled));
 
-                // Arc particles (crescent shape)
                 for (int i = 0; i < arcWidth * 2; i++) {
                     double offset = (i - arcWidth) * 0.5;
                     Vector perpendicular = getPerpendicular(direction);
                     Location particleLoc = current.clone().add(perpendicular.clone().multiply(offset));
 
-                    // Add slight curve to the arc
                     double curveOffset = Math.sin(traveled / range * Math.PI) * 0.3;
                     particleLoc.add(0, curveOffset, 0);
 
@@ -108,7 +110,6 @@ public class AirSlashAbility extends ItemAbility {
                             .spawn();
                 }
 
-                // Wind swirl particles along the path
                 for (int i = 0; i < 5; i++) {
                     Vector perp = getPerpendicular(direction);
                     double swirlOffset = Math.random() * arcWidth * 1.5 - arcWidth * 0.75;
@@ -119,13 +120,11 @@ public class AirSlashAbility extends ItemAbility {
                     current.getWorld().spawnParticle(Particle.CLOUD, swirlLoc, 1, 0, 0, 0, 0.02);
                 }
 
-                // Check for entity hits
                 for (Entity entity : current.getWorld().getNearbyEntities(current, arcWidth, 3, arcWidth)) {
                     if (entity instanceof LivingEntity && entity != player && !hitEntities.contains(entity)) {
                         Location entityLoc = entity.getLocation();
                         Vector toEntity = entityLoc.toVector().subtract(current.toVector());
 
-                        // Check if entity is in the arc
                         double distAlong = toEntity.dot(direction);
                         Vector perpDist = toEntity.clone().subtract(direction.clone().multiply(distAlong));
 
@@ -133,17 +132,13 @@ public class AirSlashAbility extends ItemAbility {
                             hitEntities.add(entity);
                             ((LivingEntity) entity).damage(damage, player);
 
-                            // Hit effects
                             entity.getWorld().spawnParticle(Particle.SWEEP_ATTACK,
-                                    entity.getLocation().add(0, 1, 0),
-                                    1, 0, 0, 0, 0);
+                                    entity.getLocation().add(0, 1, 0), 1, 0, 0, 0, 0);
                             entity.getWorld().spawnParticle(Particle.CRIT,
-                                    entity.getLocation().add(0, 1.5, 0),
-                                    10, 0.3, 0.5, 0.3, 0.1);
+                                    entity.getLocation().add(0, 1.5, 0), 10, 0.3, 0.5, 0.3, 0.1);
                             entity.getWorld().playSound(entity.getLocation(),
                                     Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.5f, 1.5f);
 
-                            // Knockback
                             Vector knockback = direction.clone().multiply(0.5);
                             entity.setVelocity(entity.getVelocity().add(knockback));
                         }
@@ -155,7 +150,10 @@ public class AirSlashAbility extends ItemAbility {
         }.runTaskTimer(getPlugin(), 0L, 1L);
 
         player.sendMessage(ColorUtils.colorize("&b🌬 Air Slash!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 

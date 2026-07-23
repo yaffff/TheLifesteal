@@ -32,6 +32,7 @@ public class FireTrailAbility extends ItemAbility {
         config.put("fireTicks", 60);
         config.put("damageRadius", 3);
         config.put("cooldown", 25);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -42,6 +43,7 @@ public class FireTrailAbility extends ItemAbility {
         fields.put("fireTicks", new ConfigField("Burn Duration (ticks)", "int", 20, 200));
         fields.put("damageRadius", new ConfigField("Ignite Radius", "int", 1, 10));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -51,14 +53,17 @@ public class FireTrailAbility extends ItemAbility {
         int fireTicks = data.getConfigInt("fireTicks");
         int radius = data.getConfigInt("damageRadius");
         int cooldown = data.getConfigInt("cooldown");
-        return "&7Leave &ca trail of fire &7for &e" + duration + "s\n&7Ignites enemies within &b" + radius + " blocks\n&8(&e" + cooldown + "s cooldown&8)";    }
+        return "&7Leave &ca trail of fire &7for &e" + duration + "s\n&7Ignites enemies within &b" + radius + " blocks\n&8(&e" + cooldown + "s cooldown&8)";
+    }
 
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -138,7 +143,10 @@ public class FireTrailAbility extends ItemAbility {
         }.runTaskTimer(getPlugin(), 0L, 1L);
 
         player.sendMessage(ColorUtils.colorize("&c🔥 Fire Trail activated for " + duration + "s!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 }

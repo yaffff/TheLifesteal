@@ -1,5 +1,6 @@
 package theLifesteal.customitem;
 
+import org.bukkit.Material;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
@@ -11,8 +12,15 @@ import theLifesteal.abilities.ItemAbilityType;
 import java.util.*;
 
 public class AdvancedCustomItem {
+
+    // Categories that get instance UUIDs (non-stackable)
+    public static final Set<String> NON_STACKABLE_CATEGORIES = Set.of(
+            "Weapons", "Armor", "Tools"
+    );
+
     private final String id;
-    private ItemStack baseItem;
+    private ItemStack baseItem;           // Stripped original material
+    private Material visualItemType;      // What the item LOOKS like
     private String displayName;
     private List<String> lore;
     private Map<Attribute, Double> attributes;
@@ -29,6 +37,7 @@ public class AdvancedCustomItem {
     public AdvancedCustomItem(String id, ItemStack baseItem) {
         this.id = id;
         this.baseItem = baseItem.clone();
+        this.visualItemType = baseItem.getType();
         this.displayName = null;
         this.lore = new ArrayList<>();
         this.attributes = new HashMap<>();
@@ -47,8 +56,61 @@ public class AdvancedCustomItem {
     }
 
     public String getId() { return id; }
+
     public ItemStack getBaseItem() { return baseItem.clone(); }
-    public void setBaseItem(ItemStack baseItem) { this.baseItem = baseItem.clone(); }
+
+    public void setBaseItem(ItemStack baseItem) {
+        this.baseItem = baseItem.clone();
+    }
+
+    public Material getVisualItemType() { return visualItemType; }
+
+    public void setVisualItemType(Material visualItemType) {
+        this.visualItemType = visualItemType;
+    }
+
+    /**
+     * Should this item get an instance UUID?
+     * Weapons, Armor, Tools = yes (unless NO_INSTANCE_UUID flag)
+     * Everything else = no
+     */
+    public boolean shouldGetInstanceUuid() {
+        if (hasFlag(CustomItemFlag.NO_INSTANCE_UUID)) return false;
+        return NON_STACKABLE_CATEGORIES.contains(category);
+    }
+
+    /**
+     * Strip all vanilla data from an ItemStack.
+     * Keeps the material so it still looks correct in-game.
+     */
+    public static ItemStack stripVanillaStats(ItemStack item) {
+        ItemStack clean = item.clone();
+        org.bukkit.inventory.meta.ItemMeta meta = clean.getItemMeta();
+        if (meta == null) return clean;
+
+        meta.setDisplayName(null);
+        meta.setLore(null);
+
+        if (clean.getType().getMaxDurability() > 0) {
+            ((org.bukkit.inventory.meta.Damageable) meta).setDamage(0);
+        }
+
+        meta.setUnbreakable(false);
+
+        for (Attribute attr : Attribute.values()) {
+            meta.removeAttributeModifier(attr);
+        }
+
+        for (Enchantment ench : meta.getEnchants().keySet()) {
+            meta.removeEnchant(ench);
+        }
+
+        meta.removeItemFlags(org.bukkit.inventory.ItemFlag.values());
+
+        clean.setItemMeta(meta);
+        return clean;
+    }
+
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
     public List<String> getLore() { return new ArrayList<>(lore); }
@@ -80,7 +142,9 @@ public class AdvancedCustomItem {
     public void clearPotionEffects() { this.potionEffects.clear(); }
 
     public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public void setCategory(String category) {
+        this.category = category;
+    }
 
     public ItemLoreBuilder.Rarity getRarity() { return rarity; }
     public void setRarity(ItemLoreBuilder.Rarity rarity) { this.rarity = rarity; }
@@ -93,6 +157,7 @@ public class AdvancedCustomItem {
 
     public AdvancedCustomItem clone() {
         AdvancedCustomItem clone = new AdvancedCustomItem(this.id, this.baseItem);
+        clone.setVisualItemType(this.visualItemType);
         clone.setDisplayName(this.displayName);
         clone.setLore(this.lore);
         clone.setAttributes(this.attributes);

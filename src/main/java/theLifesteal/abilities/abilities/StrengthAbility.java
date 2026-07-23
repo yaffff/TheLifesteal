@@ -27,6 +27,7 @@ public class StrengthAbility extends ItemAbility {
         config.put("amplifier", 0);
         config.put("duration", 10);
         config.put("cooldown", 60);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -36,6 +37,7 @@ public class StrengthAbility extends ItemAbility {
         fields.put("amplifier", new ConfigField("Strength Level (0=I, 1=II...)", "int", 0, 10));
         fields.put("duration", new ConfigField("Duration (seconds)", "int", 1, 300));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -45,14 +47,17 @@ public class StrengthAbility extends ItemAbility {
         int duration = data.getConfigInt("duration");
         int cooldown = data.getConfigInt("cooldown");
         String level = toRoman(amplifier + 1);
-        return "&7Gain &cStrength " + level + " &7for &e" + duration + "s\n&8(&e" + cooldown + "s cooldown&8)";    }
+        return "&7Gain &cStrength " + level + " &7for &e" + duration + "s\n&8(&e" + cooldown + "s cooldown&8)";
+    }
 
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -67,7 +72,10 @@ public class StrengthAbility extends ItemAbility {
         player.getWorld().spawnParticle(Particle.ANGRY_VILLAGER, player.getLocation().add(0, 1.5, 0), 10, 0.5, 0.5, 0.5, 0.1);
 
         player.sendMessage(ColorUtils.colorize("&c💢 Rage activated! &7(Strength " + toRoman(amplifier + 1) + " for " + duration + "s)"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 

@@ -33,6 +33,7 @@ public class TornadoAbility extends ItemAbility {
         config.put("duration", 4);
         config.put("damage", 6.0);
         config.put("cooldown", 25);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -46,6 +47,7 @@ public class TornadoAbility extends ItemAbility {
         fields.put("duration", new ConfigField("Duration (seconds)", "int", 2, 15));
         fields.put("damage", new ConfigField("Damage", "double", 1.0, 30.0));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -62,9 +64,11 @@ public class TornadoAbility extends ItemAbility {
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -105,7 +109,8 @@ public class TornadoAbility extends ItemAbility {
             @Override
             public void run() {
                 if (tick >= totalTicks) {
-                    center.getWorld().spawnParticle(Particle.CLOUD, center, 20, pullRadius * 0.8, 2, pullRadius * 0.8, 0.1);
+                    // OPTIMIZED: 15 cloud cleanup (was 20)
+                    center.getWorld().spawnParticle(Particle.CLOUD, center, 15, pullRadius * 0.8, 2, pullRadius * 0.8, 0.1);
                     center.getWorld().playSound(center, Sound.ENTITY_BREEZE_DEATH, 1.0f, 1.5f);
                     this.cancel();
                     return;
@@ -114,10 +119,10 @@ public class TornadoAbility extends ItemAbility {
                 double progress = (double) tick / totalTicks;
                 double currentRadius = pullRadius * (0.4 + progress * 0.6);
 
-                // Spiral particles - 3 spiraling strands, much fewer particles
-                for (int strand = 0; strand < 3; strand++) {
-                    double strandOffset = strand * Math.PI * 2 / 3;
-                    for (double y = 0; y < tornadoHeight; y += 1.2) {
+                // OPTIMIZED: 2 strands (was 3), spacing at 2.0 blocks (was 1.2)
+                for (int strand = 0; strand < 2; strand++) {
+                    double strandOffset = strand * Math.PI;
+                    for (double y = 0; y < tornadoHeight; y += 2.0) {
                         double heightProgress = y / tornadoHeight;
                         double radius = currentRadius * (1.0 - heightProgress * 0.5);
                         double angle = (tick * 0.4) + (heightProgress * 6) + strandOffset;
@@ -126,18 +131,18 @@ public class TornadoAbility extends ItemAbility {
 
                         center.getWorld().spawnParticle(Particle.CLOUD,
                                 center.clone().add(x, y, z),
-                                1, 0, 0, 0, 0.03);
+                                1, 0, 0, 0, 0.04);
                     }
                 }
 
-                // Minimal ground ring
-                for (int i = 0; i < 12; i++) {
-                    double angle = i * Math.PI * 2 / 12;
+                // OPTIMIZED: 8 ground ring (was 12)
+                for (int i = 0; i < 8; i++) {
+                    double angle = i * Math.PI * 2 / 8;
                     double x = Math.cos(angle) * currentRadius;
                     double z = Math.sin(angle) * currentRadius;
                     center.getWorld().spawnParticle(Particle.CLOUD,
                             center.clone().add(x, 0.1, z),
-                            1, 0, 0, 0, 0.02);
+                            1, 0, 0, 0, 0.03);
                 }
 
                 // Pull and launch entities
@@ -188,7 +193,10 @@ public class TornadoAbility extends ItemAbility {
         }.runTaskTimer(getPlugin(), 0L, 1L);
 
         player.sendMessage(ColorUtils.colorize("&f🌪 Tornado unleashed!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 }

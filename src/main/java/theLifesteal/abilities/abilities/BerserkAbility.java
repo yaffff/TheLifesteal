@@ -31,6 +31,9 @@ public class BerserkAbility extends ItemAbility {
         config.put("maxBonusDamage", 15.0);
         config.put("affectPlayers", true);
         config.put("affectMobs", true);
+        config.put("trigger_on", "FULL_ATTACK");
+        config.put("affectPassive", true);
+        config.put("affectHostile", true);
         return config;
     }
 
@@ -41,6 +44,9 @@ public class BerserkAbility extends ItemAbility {
         fields.put("maxBonusDamage", new ConfigField("Max Bonus Damage", "double", 1.0, 50.0));
         fields.put("affectPlayers", new ConfigField("Affect Players", "boolean"));
         fields.put("affectMobs", new ConfigField("Affect Mobs", "boolean"));
+        fields.put("trigger_on", new ConfigField("Trigger On", "string"));
+        fields.put("affectPassive", new ConfigField("Affect Passive Mobs", "boolean"));
+        fields.put("affectHostile", new ConfigField("Affect Hostile Mobs", "boolean"));
         return fields;
     }
 
@@ -51,7 +57,8 @@ public class BerserkAbility extends ItemAbility {
         return "&7Deal &c+" + String.format("%.2f", perHP) + " damage &7per missing HP\n&7Max bonus &c" + formatDamage(max) + " &7| More hurt = more damage";
     }
 
-    public boolean executeOnHit(Player attacker, LivingEntity victim, ItemAbilityData data,
+    @Override
+    public boolean onHitExecute(Player attacker, LivingEntity victim, ItemAbilityData data,
                                 AbilityCooldownManager cooldownManager, String itemId, double baseDamage) {
         // Prevent recursive damage
         if (ignoreDamage.contains(victim.getUniqueId())) return false;
@@ -89,7 +96,7 @@ public class BerserkAbility extends ItemAbility {
 
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
-        return false;
+        return false; // ON_HIT abilities don't use execute()
     }
 
     private String formatDamage(double damage) {

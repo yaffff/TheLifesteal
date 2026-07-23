@@ -108,12 +108,13 @@ public class HeartManager {
         double loss = configManager.getHeartValue();
 
         if (currentMax <= minHealth) {
-            return false; // no loss, no drop
+            return false;
         }
 
         double newMax = Math.max(currentMax - loss, minHealth);
         maxHealth.setBaseValue(newMax);
 
+        // Only drop old heart if drop-hearts-on-death is enabled
         if (configManager.shouldDropHeartsOnDeath() && Math.random() < configManager.getDropChance()) {
             ItemStack heartDrop = createHeartItem(1);
             player.getWorld().dropItemNaturally(player.getLocation(), heartDrop);

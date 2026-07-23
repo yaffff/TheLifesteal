@@ -32,6 +32,7 @@ public class BlinkAbility extends ItemAbility {
         config.put("strengthDuration", 5);
         config.put("invisibilityDuration", 3);
         config.put("cooldown", 25);
+        config.put("cooldownScope", "ITEM");
         return config;
     }
 
@@ -43,6 +44,7 @@ public class BlinkAbility extends ItemAbility {
         fields.put("strengthDuration", new ConfigField("Strength Duration (s)", "int", 1, 30));
         fields.put("invisibilityDuration", new ConfigField("Invisibility Duration (s)", "int", 1, 30));
         fields.put("cooldown", new ConfigField("Cooldown (seconds)", "int", 0, 3600));
+        fields.put("cooldownScope", new ConfigField("Cooldown Scope", "string"));
         return fields;
     }
 
@@ -53,14 +55,17 @@ public class BlinkAbility extends ItemAbility {
         int strDur = data.getConfigInt("strengthDuration");
         int invDur = data.getConfigInt("invisibilityDuration");
         int cooldown = data.getConfigInt("cooldown");
-        return "&7Teleport behind target within &b" + range + " blocks\n&7Gain &cStrength " + toRoman(strAmp + 1) + " &7+ Invisibility\n&8(&e" + cooldown + "s cooldown&8)";    }
+        return "&7Teleport behind target within &b" + range + " blocks\n&7Gain &cStrength " + toRoman(strAmp + 1) + " &7+ Invisibility\n&8(&e" + cooldown + "s cooldown&8)";
+    }
 
     @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
+        String scope = data.getConfigString("cooldownScope");
+        if (scope == null || scope.isEmpty()) scope = "ITEM";
 
-        if (cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId)) {
-            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId);
+        if (cooldown > 0 && cooldownManager.isOnCooldown(player.getUniqueId(), getId(), itemId, scope)) {
+            long remaining = cooldownManager.getRemainingCooldown(player.getUniqueId(), getId(), itemId, scope);
             player.sendMessage(ColorUtils.colorize("&cOn cooldown! &7(" + cooldownManager.formatCooldown(remaining) + ")"));
             return false;
         }
@@ -81,12 +86,15 @@ public class BlinkAbility extends ItemAbility {
         Vector direction = targetLoc.getDirection().normalize();
         Location behind = targetLoc.clone().add(direction.clone().multiply(-2));
         behind.setY(targetLoc.getY());
-        behind.setYaw(player.getLocation().getYaw());
-        behind.setPitch(player.getLocation().getPitch());
 
         if (behind.getBlock().getType().isSolid() || behind.clone().add(0, 1, 0).getBlock().getType().isSolid()) {
             behind = targetLoc.clone();
         }
+
+        // Face the target
+        Vector faceDir = targetLoc.toVector().subtract(behind.toVector());
+        faceDir.setY(0);
+        behind.setDirection(faceDir.normalize());
 
         spawnShadowParticles(startLoc);
         player.getWorld().playSound(startLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.8f);
@@ -95,14 +103,16 @@ public class BlinkAbility extends ItemAbility {
 
         spawnShadowParticles(behind);
         player.getWorld().playSound(behind, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.2f);
-
         player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, strengthDuration * 20, strengthAmplifier, false, true, true));
         player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, invisibilityDuration * 20, 0, false, false, true));
 
         target.getWorld().spawnParticle(Particle.FLASH, target.getEyeLocation(), 1, 0, 0, 0, 0);
 
         player.sendMessage(ColorUtils.colorize("&5🖤 Shadow Stepped behind &d" + target.getName() + "&5!"));
-        cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, cooldown);
+
+        if (cooldown > 0) {
+            cooldownManager.setCooldown(player.getUniqueId(), getId(), itemId, scope, cooldown);
+        }
         return true;
     }
 

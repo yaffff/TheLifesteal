@@ -18,12 +18,12 @@ import java.util.*;
 public class PoisonStrikeAbility extends ItemAbility {
 
     private final Map<UUID, PoisonData> activePoisons;
-    private final Set<UUID> ignoreDamage;
+    private final Set<UUID> processingDamage;
 
     public PoisonStrikeAbility(JavaPlugin plugin) {
         super(plugin, "poison_strike", "Poison Strike", ItemAbilityType.ON_HIT);
         this.activePoisons = new HashMap<>();
-        this.ignoreDamage = new HashSet<>();
+        this.processingDamage = new HashSet<>();
     }
 
     @Override
@@ -31,11 +31,14 @@ public class PoisonStrikeAbility extends ItemAbility {
         Map<String, Object> config = new LinkedHashMap<>();
         config.put("chance", 20);
         config.put("poisonDuration", 5);
-        config.put("baseDamagePerTick", 1.0);
-        config.put("damagePerStack", 0.5);
+        config.put("damagePerSecond", 2.0);
+        config.put("damagePerStack", 0.8);
         config.put("maxStacks", 5);
+        config.put("trigger_on", "FULL_ATTACK");
         config.put("affectPlayers", true);
         config.put("affectMobs", true);
+        config.put("affectPassive", true);
+        config.put("affectHostile", true);
         return config;
     }
 
@@ -44,11 +47,14 @@ public class PoisonStrikeAbility extends ItemAbility {
         Map<String, ConfigField> fields = new LinkedHashMap<>();
         fields.put("chance", new ConfigField("Chance (%)", "int", 1, 100));
         fields.put("poisonDuration", new ConfigField("Poison Duration (s)", "int", 1, 30));
-        fields.put("baseDamagePerTick", new ConfigField("Base Damage per Tick", "double", 0.25, 10.0));
-        fields.put("damagePerStack", new ConfigField("Extra Damage per Stack", "double", 0.1, 5.0));
+        fields.put("damagePerSecond", new ConfigField("Damage per Second", "double", 0.5, 20.0));
+        fields.put("damagePerStack", new ConfigField("Extra DPS per Stack", "double", 0.1, 10.0));
         fields.put("maxStacks", new ConfigField("Max Stacks", "int", 1, 20));
+        fields.put("trigger_on", new ConfigField("Trigger On", "string"));
         fields.put("affectPlayers", new ConfigField("Affect Players", "boolean"));
         fields.put("affectMobs", new ConfigField("Affect Mobs", "boolean"));
+        fields.put("affectPassive", new ConfigField("Affect Passive Mobs", "boolean"));
+        fields.put("affectHostile", new ConfigField("Affect Hostile Mobs", "boolean"));
         return fields;
     }
 
@@ -56,16 +62,17 @@ public class PoisonStrikeAbility extends ItemAbility {
     public String buildLore(ItemAbilityData data) {
         int chance = data.getConfigInt("chance");
         int duration = data.getConfigInt("poisonDuration");
-        double baseDmg = data.getConfigDouble("baseDamagePerTick");
+        double dps = data.getConfigDouble("damagePerSecond");
         double perStack = data.getConfigDouble("damagePerStack");
         int maxStacks = data.getConfigInt("maxStacks");
-        return "&7Apply &astacking poison &7on hit\n&8(&b" + chance + "%&7, &a" + duration + "s&7, &2" + String.format("%.1f", baseDmg) + " +" + String.format("%.1f", perStack) + "/stack&8)";
+        double maxDps = dps + (perStack * (maxStacks - 1));
+        return "&7Apply &astacking poison &7on hit\n&8(&b" + chance + "%&7, &a" + duration + "s&7, &2" + String.format("%.1f", dps) + " &7DPS)\n&7Max: &2" + String.format("%.1f", maxDps) + " DPS &7at &a" + maxStacks + " stacks";
     }
 
-    public boolean executeOnHit(Player attacker, LivingEntity victim, ItemAbilityData data,
-                                AbilityCooldownManager cooldownManager, String itemId) {
-        // Skip if this damage came from our poison tick
-        if (ignoreDamage.contains(victim.getUniqueId())) return false;
+    @Override
+    public boolean onHitExecute(Player attacker, LivingEntity victim, ItemAbilityData data,
+                                AbilityCooldownManager cooldownManager, String itemId, double baseDamage) {
+        if (processingDamage.contains(victim.getUniqueId())) return false;
         if (victim instanceof Player && !data.getConfigBoolean("affectPlayers")) return false;
         if (!(victim instanceof Player) && !data.getConfigBoolean("affectMobs")) return false;
 
@@ -73,33 +80,38 @@ public class PoisonStrikeAbility extends ItemAbility {
         if (Math.random() * 100 >= chance) return false;
 
         int duration = data.getConfigInt("poisonDuration");
-        double baseDamagePerTick = data.getConfigDouble("baseDamagePerTick");
-        double damagePerStack = data.getConfigDouble("damagePerStack");
+        double tempDps = data.getConfigDouble("damagePerSecond");
+        if (tempDps == 0.0 && data.getConfig().containsKey("baseDamagePerTick")) {
+            tempDps = data.getConfigDouble("baseDamagePerTick") * 2.0;
+        }
+        final double damagePerSecond = tempDps;
+        final double damagePerStack = data.getConfigDouble("damagePerStack");
         int maxStacks = data.getConfigInt("maxStacks");
 
         UUID victimId = victim.getUniqueId();
-        PoisonData poisonData = activePoisons.get(victimId);
+        PoisonData existing = activePoisons.get(victimId);
 
         int newStacks;
-        if (poisonData == null || poisonData.isExpired()) {
+        if (existing == null || existing.isExpired()) {
             newStacks = 1;
         } else {
-            newStacks = Math.min(poisonData.stacks + 1, maxStacks);
+            newStacks = Math.min(existing.stacks + 1, maxStacks);
         }
 
-        double dmgPerTick = baseDamagePerTick + (damagePerStack * (newStacks - 1));
+        double totalDps = damagePerSecond + (damagePerStack * (newStacks - 1));
 
-        if (poisonData != null && poisonData.task != null) {
-            poisonData.task.cancel();
+        if (existing != null && existing.task != null) {
+            existing.task.cancel();
         }
 
         final int finalStacks = newStacks;
-        final int finalDuration = duration;
-        final double finalDmg = dmgPerTick;
+        final double finalDps = totalDps;
+        final double damagePerTick = finalDps / 2.0;
 
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(getPlugin(), new Runnable() {
             int ticks = 0;
-            int maxTicks = finalDuration * 20;
+            int maxTicks = duration * 20;
+            int damageTicks = 0;
 
             @Override
             public void run() {
@@ -107,37 +119,64 @@ public class PoisonStrikeAbility extends ItemAbility {
                 if (pd == null || pd.stacks != finalStacks) return;
 
                 if (ticks >= maxTicks || victim.isDead() || !victim.isValid()) {
-                    pd.task = null;
                     if (pd.stacks == finalStacks) {
-                        activePoisons.remove(victimId);
+                        pd.stacks = 0; // Mark expired, don't remove
+                        if (victim.isValid() && !victim.isDead()) {
+                            victim.sendMessage(ColorUtils.colorize("&a☠ Poison has worn off"));
+                        }
                     }
                     return;
                 }
 
                 if (ticks % 10 == 0 && ticks > 0) {
-                    ignoreDamage.add(victimId);
-                    victim.damage(finalDmg);
-                    Bukkit.getScheduler().runTaskLater(getPlugin(), () -> ignoreDamage.remove(victimId), 2L);
+                    processingDamage.add(victimId);
+                    victim.damage(damagePerTick);
+                    Bukkit.getScheduler().runTaskLater(getPlugin(), () -> processingDamage.remove(victimId), 1L);
+                    damageTicks++;
 
                     victim.getWorld().spawnParticle(Particle.DUST,
                             victim.getLocation().add(0, 1.5, 0),
-                            5, 0.2, 0.3, 0.2,
-                            new Particle.DustOptions(org.bukkit.Color.fromRGB(0, 180, 0), 1.5f));
+                            3, 0.2, 0.4, 0.2,
+                            new Particle.DustOptions(org.bukkit.Color.fromRGB(0, 180, 0), 1.2f));
+
+                    if (damageTicks % 4 == 0 && victim instanceof Player) {
+                        victim.sendMessage(ColorUtils.colorize("&a☠ Poison tick &7-&c" + String.format("%.1f", damagePerTick) + "❤ &7(&a" + finalStacks + " stacks&7, &c" + String.format("%.1f", finalDps) + " DPS&7)"));
+                    }
                 }
+
+                if (ticks % 5 == 0) {
+                    for (int i = 0; i < 2; i++) {
+                        victim.getWorld().spawnParticle(Particle.DUST,
+                                victim.getLocation().add(
+                                        Math.random() * 0.4 - 0.2,
+                                        0.8 + Math.random() * 1.2,
+                                        Math.random() * 0.4 - 0.2),
+                                1, 0, 0, 0,
+                                new Particle.DustOptions(org.bukkit.Color.fromRGB(50, 200, 50), 0.8f));
+                    }
+                }
+
                 ticks++;
             }
         }, 0L, 1L);
 
-        poisonData = new PoisonData(newStacks, task, System.currentTimeMillis() + (duration * 1000L));
+        PoisonData poisonData = new PoisonData(newStacks, task, System.currentTimeMillis() + (duration * 1000L), totalDps);
         activePoisons.put(victimId, poisonData);
 
-        victim.getWorld().spawnParticle(Particle.DUST,
-                victim.getLocation().add(0, 1.5, 0),
-                15, 0.3, 0.5, 0.3,
-                new Particle.DustOptions(org.bukkit.Color.fromRGB(0, 200, 0), 2f));
-        victim.getWorld().playSound(victim.getLocation(), Sound.ENTITY_SPIDER_HURT, 0.6f, 1.0f);
+        for (int i = 0; i < 10; i++) {
+            victim.getWorld().spawnParticle(Particle.DUST,
+                    victim.getLocation().add(0, 1.5, 0),
+                    1, 0.3, 0.5, 0.3,
+                    new Particle.DustOptions(org.bukkit.Color.fromRGB(0, 200, 0), 2f));
+        }
+        victim.getWorld().playSound(victim.getLocation(), Sound.ENTITY_SPIDER_HURT, 0.5f, 1.0f);
 
-        attacker.sendMessage(ColorUtils.colorize("&a☠ Poison stacked! &7(Stack &2" + newStacks + "&7/&2" + maxStacks + "&7, &c" + String.format("%.1f", finalDmg) + " &7per tick)"));
+        attacker.sendMessage(ColorUtils.colorize("&a☠ Poison &2" + newStacks + "x &7| &c" + String.format("%.1f", totalDps) + " DPS &7| &a" + duration + "s"));
+
+        if (victim instanceof Player) {
+            victim.sendMessage(ColorUtils.colorize("&a☠ You've been poisoned! &7(&c" + String.format("%.1f", totalDps) + " DPS &7| &a" + duration + "s&7)"));
+        }
+
         return true;
     }
 
@@ -150,15 +189,17 @@ public class PoisonStrikeAbility extends ItemAbility {
         int stacks;
         BukkitTask task;
         long expireTime;
+        double dps;
 
-        PoisonData(int stacks, BukkitTask task, long expireTime) {
+        PoisonData(int stacks, BukkitTask task, long expireTime, double dps) {
             this.stacks = stacks;
             this.task = task;
             this.expireTime = expireTime;
+            this.dps = dps;
         }
 
         boolean isExpired() {
-            return System.currentTimeMillis() > expireTime;
+            return stacks == 0 || System.currentTimeMillis() > expireTime;
         }
     }
 }

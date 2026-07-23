@@ -1,8 +1,13 @@
 package theLifesteal.abilities;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Sound;
+import org.bukkit.entity.Animals;
+import org.bukkit.entity.Ambient;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.WaterMob;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
@@ -10,14 +15,15 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
-import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import theLifesteal.ColorUtils;
 import theLifesteal.abilities.abilities.CriticalStrikeAbility;
 import theLifesteal.customitem.AdvancedCustomItem;
 import theLifesteal.customitem.AdvancedCustomItemManager;
+import theLifesteal.customitem.CustomItemFlag;
 
 import java.util.List;
 import java.util.Map;
@@ -36,12 +42,9 @@ public class ItemAbilityListener implements Listener {
 
     @EventHandler
     public void onRightClick(PlayerInteractEvent event) {
-        // Only handle right clicks
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
-
-        // Only main hand to prevent double-trigger
         if (event.getHand() != EquipmentSlot.HAND) {
             return;
         }
@@ -51,30 +54,29 @@ public class ItemAbilityListener implements Listener {
         AdvancedCustomItem customItem = customItemManager.getItemByStack(item);
         if (customItem == null) return;
 
+        // CANCEL IMMEDIATELY — prevent vanilla use (snowball throw, shield, etc.)
+        event.setCancelled(true);
+
         Map<ItemAbilityType, List<ItemAbilityData>> abilities = customItem.getAbilities();
         boolean success;
 
         if (player.isSneaking()) {
-            // Shift right-click
             success = abilityManager.executeShiftRightClick(player, customItem.getId(), abilities);
         } else {
-            // Normal right-click
             success = abilityManager.executeRightClick(player, customItem.getId(), abilities);
         }
 
-        if (success) {
-            event.setCancelled(true);
+        if (success && customItem.hasFlag(CustomItemFlag.CONSUMABLE)) {
+            consumeItem(player);
         }
     }
     @EventHandler
     public void onItemHeld(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
-        // Small delay to check the new item
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             ItemStack newItem = player.getInventory().getItem(event.getNewSlot());
             AdvancedCustomItem customItem = customItemManager.getItemByStack(newItem);
             if (customItem == null || !hasCriticalStrikeAbility(customItem)) {
-                // Remove bossbar if switching away from crit item
                 CriticalStrikeAbility critAbility = getCriticalStrikeAbility();
                 if (critAbility != null) {
                     critAbility.removeBossBar(player);
@@ -100,6 +102,7 @@ public class ItemAbilityListener implements Listener {
         }
         return null;
     }
+
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         CriticalStrikeAbility critAbility = getCriticalStrikeAbility();
@@ -118,9 +121,73 @@ public class ItemAbilityListener implements Listener {
         if (customItem == null) return;
 
         Map<ItemAbilityType, List<ItemAbilityData>> abilities = customItem.getAbilities();
-        abilityManager.executeOnHit(attacker, victim, customItem.getId(), abilities, event.getDamage());
+        List<ItemAbilityData> onHitAbilities = abilities.get(ItemAbilityType.ON_HIT);
+        if (onHitAbilities == null || onHitAbilities.isEmpty()) return;
+
+        boolean isFullAttack = attacker.getAttackCooldown() >= 0.99f;
+        boolean isCritical = isFullAttack && attacker.getFallDistance() > 0.0f && !attacker.isOnGround();
+        boolean isPlayer = victim instanceof Player;
+        boolean isPassive = victim instanceof Animals || victim instanceof WaterMob || victim instanceof Ambient;
+        boolean isHostile = victim instanceof Monster;
+
+        boolean anyTriggered = false;
+
+        for (ItemAbilityData data : onHitAbilities) {
+            String triggerOn = data.getConfigString("trigger_on");
+            if (triggerOn == null || triggerOn.isEmpty()) triggerOn = "ALL";
+
+            boolean shouldTrigger = switch (triggerOn.toUpperCase()) {
+                case "ALL" -> true;
+                case "FULL_ATTACK" -> isFullAttack;
+                case "CRITICAL" -> isCritical;
+                case "FULL_OR_CRIT" -> isFullAttack || isCritical;
+                default -> true;
+            };
+
+            if (!shouldTrigger) continue;
+
+            if (isPlayer && !data.getConfigBoolean("affectPlayers")) continue;
+            if (isPassive && !data.getConfigBoolean("affectPassive")) continue;
+            if (isHostile && !data.getConfigBoolean("affectHostile")) continue;
+
+            ItemAbility ability = abilityManager.getAbility(data.getAbilityId());
+            if (ability != null) {
+                boolean triggered = ability.onHitExecute(attacker, victim, data,
+                        abilityManager.getCooldownManager(), customItem.getId(), event.getDamage());
+                if (triggered) {
+                    anyTriggered = true;
+                }
+            }
+        }
+
+        if (anyTriggered && customItem.hasFlag(CustomItemFlag.CONSUMABLE)) {
+            consumeItem(attacker);
+        }
     }
 
+    /**
+     * Consume one item from the player's main hand.
+     * Removes instance UUID from tracking, plays break sound, deletes item.
+     */
+    private void consumeItem(Player player) {
+        ItemStack item = player.getInventory().getItemInMainHand();
+        if (item == null) return;
+
+        String instanceUuid = customItemManager.getInstanceUuid(item);
+        if (instanceUuid != null) {
+            customItemManager.removeInstance(instanceUuid);
+        }
+
+        player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 0.8f, 1.0f);
+
+        item.setAmount(item.getAmount() - 1);
+
+        if (item.getAmount() <= 0) {
+            player.getInventory().setItemInMainHand(null);
+        }
+
+        player.sendMessage(ColorUtils.colorize("&7✦ Item consumed!"));
+    }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
@@ -129,7 +196,5 @@ public class ItemAbilityListener implements Listener {
         if (critAbility != null) {
             critAbility.removeBossBar(event.getPlayer());
         }
-
     }
-
 }

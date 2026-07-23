@@ -79,6 +79,7 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         this.advancedItemManager = new AdvancedCustomItemManager(this);
         this.advancedItemManager.setAbilityManager(abilityManager);
         this.advancedItemManager.loadItems();
+        advancedItemManager.registerDefaultItems(getConfig());
 
         this.customItemGUI = new CustomItemGUI(this, advancedItemManager);
         this.abilityGUI = new ItemAbilityGUI(this, abilityManager);
@@ -155,6 +156,7 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         getLogger().log(Level.INFO, "§5✨ §eEnchant System loaded! §5✨");
     }
 
+
     private void registerAbilities() {
         abilityManager.registerAbility(new HealingAbility(this));
         abilityManager.registerAbility(new StrengthAbility(this));
@@ -172,12 +174,13 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         abilityManager.registerAbility(new PoisonStrikeAbility(this));
         abilityManager.registerAbility(new PoisonDaggerAbility(this));
         abilityManager.registerAbility(new ChainLightningAbility(this));
-        abilityManager.registerAbility(new ShadowEscapeAbility(this));
+        abilityManager.registerAbility(new WitheringStrikeAbility(this));
         abilityManager.registerAbility(new ExplosiveChargeAbility(this));
         abilityManager.registerAbility(new TornadoAbility(this));
         abilityManager.registerAbility(new BerserkAbility(this));
         abilityManager.registerAbility(new BloodBoltsAbility(this));
         abilityManager.registerAbility(new IceStormAbility(this));
+        abilityManager.registerAbility(new LifeConsumeAbility(this));
         getLogger().info("§a✓ Registered " + abilityManager.getAllAbilities().size() + " abilities");
     }
 

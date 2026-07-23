@@ -2,7 +2,7 @@ package theLifesteal.customitem;
 
 public enum CustomItemFlag {
     GLOW,
-    CONSUMABLE,
+    CONSUMABLE,         // Item is deleted after successful ability use
     UNBREAKABLE,
     HIDE_ENCHANTS,
     HIDE_ATTRIBUTES,
@@ -11,5 +11,6 @@ public enum CustomItemFlag {
     HIDE_PLACED_ON,
     HIDE_ADDITIONAL_TOOLTIP,
     HIDE_DYE,
-    HIDE_ARMOR_TRIM
+    HIDE_ARMOR_TRIM,
+    NO_INSTANCE_UUID  //   Item can stack, no unique ID assigned
 }
