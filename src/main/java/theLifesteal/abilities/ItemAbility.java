@@ -25,6 +25,26 @@ public abstract class ItemAbility {
     public ItemAbilityType getType() { return type; }
     public JavaPlugin getPlugin() { return plugin; }
 
+    public AbilityKillTracker getKillTracker() {
+        if (plugin instanceof theLifesteal.TheLifesteal lifesteal) {
+            if (lifesteal.getAbilityManager() != null) {
+                return lifesteal.getAbilityManager().getKillTracker();
+            }
+        }
+        return null;
+    }
+
+    public void recordAbilityDamage(Player caster, LivingEntity victim) {
+        recordAbilityDamage(caster, victim, 15000L);
+    }
+
+    public void recordAbilityDamage(Player caster, LivingEntity victim, long durationMs) {
+        AbilityKillTracker tracker = getKillTracker();
+        if (tracker != null && caster != null && victim != null) {
+            tracker.recordAbilityDamage(caster, victim, getId(), durationMs);
+        }
+    }
+
     /**
      * Get the default config values for this ability.
      * Used when creating a new ability instance on an item.

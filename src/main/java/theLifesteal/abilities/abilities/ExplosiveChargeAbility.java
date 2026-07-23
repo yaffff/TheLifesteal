@@ -306,6 +306,7 @@ public class ExplosiveChargeAbility extends ItemAbility implements Listener {
             double dist = target.getLocation().distance(center);
             if (dist <= radius) {
                 double damageMod = 1.0 - (dist / radius);
+                recordAbilityDamage(player, target);
                 target.damage(damage * damageMod, player);
 
                 Vector dir = target.getLocation().toVector().subtract(center.toVector()).normalize();

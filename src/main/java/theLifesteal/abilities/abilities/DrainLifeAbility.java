@@ -63,6 +63,8 @@ public class DrainLifeAbility extends ItemAbility {
         int chance = data.getConfigInt("chance");
         if (Math.random() * 100 >= chance) return false;
 
+        recordAbilityDamage(attacker, victim);
+
         double health = data.getConfigDouble("health");
         double maxHealth = attacker.getAttribute(Attribute.MAX_HEALTH).getValue();
         double newHealth = Math.min(attacker.getHealth() + health, maxHealth);

@@ -24,6 +24,17 @@ public class DeathListener implements Listener {
         Player victim = event.getEntity();
         Player killer = victim.getKiller();
 
+        // If Bukkit killer is null, check if victim was recently damaged/affected by an ability
+        if (killer == null && plugin.getAbilityManager() != null) {
+            var killTracker = plugin.getAbilityManager().getKillTracker();
+            if (killTracker != null) {
+                killer = killTracker.getCasterForVictim(victim.getUniqueId());
+                if (killer != null) {
+                    victim.setKiller(killer);
+                }
+            }
+        }
+
         // === PVP HANDLING ===
         if (killer != null) {
             // Victim loses max HP
@@ -40,6 +51,11 @@ public class DeathListener implements Listener {
 
         // === DEATH DROP ===
         handleDeathDrop(victim, killer != null);
+
+        // Cleanup ability tracking for victim
+        if (plugin.getAbilityManager() != null && plugin.getAbilityManager().getKillTracker() != null) {
+            plugin.getAbilityManager().getKillTracker().clearVictim(victim.getUniqueId());
+        }
     }
 
     /**

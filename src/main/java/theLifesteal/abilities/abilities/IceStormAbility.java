@@ -214,6 +214,7 @@ public class IceStormAbility extends ItemAbility {
                         LivingEntity target = (LivingEntity) entity;
                         double dist = target.getLocation().distance(center);
                         if (dist <= currentRadius) {
+                            recordAbilityDamage(player, target, 15000L);
                             target.addPotionEffect(new PotionEffect(
                                     PotionEffectType.SLOWNESS, 40, stunAmplifier, false, true, true));
                             target.addPotionEffect(new PotionEffect(

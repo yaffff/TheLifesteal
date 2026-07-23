@@ -103,6 +103,7 @@ public class ChainLightningAbility extends ItemAbility {
         List<LivingEntity> chainOrder = new ArrayList<>();
         chainOrder.add(firstTarget);
         firstTarget.damage(damage, player);
+        recordAbilityDamage(player, firstTarget);
 
         LivingEntity currentTarget = firstTarget;
         while (chainOrder.size() < maxTargets) {
@@ -110,6 +111,7 @@ public class ChainLightningAbility extends ItemAbility {
             if (nextTarget == null) break;
             hitTargets.add(nextTarget);
             chainOrder.add(nextTarget);
+            recordAbilityDamage(player, nextTarget);
             nextTarget.damage(damage, player);
             currentTarget = nextTarget;
         }

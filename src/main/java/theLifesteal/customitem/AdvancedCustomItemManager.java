@@ -33,6 +33,10 @@ public class AdvancedCustomItemManager {
     private final Set<String> activeInstanceUuids;
     private ItemAbilityManager abilityManager;
 
+    // Deterministic UUID per attribute type to prevent Bukkit attribute collision errors
+    private UUID getAttributeUuid(Attribute attribute) {
+        return UUID.nameUUIDFromBytes(("thelifesteal_attr_" + attribute.name().toLowerCase()).getBytes());
+    }
     public AdvancedCustomItemManager(JavaPlugin plugin) {
         this.plugin = plugin;
         this.dataFile = new File(plugin.getDataFolder(), "custom_items.yml");
@@ -341,16 +345,17 @@ public class AdvancedCustomItemManager {
             meta.removeEnchant(ench);
         }
 
-        // Zero out base attributes for weapons/armor/tools
+        // Zero out base attributes for weapons/armor/tools using per-attribute deterministic UUID
+        // This SETS the attribute to 0, then custom values SET on top
         if (AdvancedCustomItem.NON_STACKABLE_CATEGORIES.contains(item.getCategory())) {
-            meta.addAttributeModifier(Attribute.ATTACK_DAMAGE, new AttributeModifier(
-                    UUID.randomUUID(), "zero_base", 0, AttributeModifier.Operation.ADD_NUMBER));
-            meta.addAttributeModifier(Attribute.ATTACK_SPEED, new AttributeModifier(
-                    UUID.randomUUID(), "zero_base", 0, AttributeModifier.Operation.ADD_NUMBER));
-            meta.addAttributeModifier(Attribute.ARMOR, new AttributeModifier(
-                    UUID.randomUUID(), "zero_base", 0, AttributeModifier.Operation.ADD_NUMBER));
-            meta.addAttributeModifier(Attribute.ARMOR_TOUGHNESS, new AttributeModifier(
-                    UUID.randomUUID(), "zero_base", 0, AttributeModifier.Operation.ADD_NUMBER));
+            Attribute[] zeroAttrs = new Attribute[] {
+                    Attribute.ATTACK_DAMAGE, Attribute.ATTACK_SPEED, Attribute.ARMOR, Attribute.ARMOR_TOUGHNESS
+            };
+            for (Attribute attr : zeroAttrs) {
+                AttributeModifier zeroMod = new AttributeModifier(
+                        getAttributeUuid(attr), "custom_attr_" + attr.name().toLowerCase(), 0, AttributeModifier.Operation.ADD_NUMBER);
+                meta.addAttributeModifier(attr, zeroMod);
+            }
         }
 
         // Display name
@@ -394,16 +399,17 @@ public class AdvancedCustomItemManager {
         if (item.hasFlag(CustomItemFlag.HIDE_DYE)) meta.addItemFlags(ItemFlag.HIDE_DYE);
         if (item.hasFlag(CustomItemFlag.HIDE_ARMOR_TRIM)) meta.addItemFlags(ItemFlag.HIDE_ARMOR_TRIM);
 
-        // Custom attributes — remove existing then add fresh
+        // Custom attributes — SET using per-attribute deterministic UUID
         for (Map.Entry<Attribute, Double> entry : item.getAttributes().entrySet()) {
-            meta.removeAttributeModifier(entry.getKey());
+            Attribute attr = entry.getKey();
+            meta.removeAttributeModifier(attr);
             AttributeModifier modifier = new AttributeModifier(
-                    UUID.randomUUID(),
-                    "custom_attr",
+                    getAttributeUuid(attr),
+                    "custom_attr_" + attr.name().toLowerCase(),
                     entry.getValue(),
                     AttributeModifier.Operation.ADD_NUMBER
             );
-            meta.addAttributeModifier(entry.getKey(), modifier);
+            meta.addAttributeModifier(attr, modifier);
         }
 
         // Store item ID

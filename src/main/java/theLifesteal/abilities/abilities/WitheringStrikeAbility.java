@@ -106,6 +106,7 @@ public class WitheringStrikeAbility extends ItemAbility {
             }
         }, effectiveDuration * 20L);
 
+        recordAbilityDamage(attacker, victim, (effectiveDuration * 1000L) + 10000L);
         victim.addPotionEffect(new PotionEffect(
                 PotionEffectType.WITHER, effectiveDuration * 20, effectiveAmplifier, false, true, true));
 

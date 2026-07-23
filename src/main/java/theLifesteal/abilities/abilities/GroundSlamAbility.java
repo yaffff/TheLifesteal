@@ -189,6 +189,7 @@ public class GroundSlamAbility extends ItemAbility {
                             if (dist <= slamRadius) {
                                 Location strikeLoc = entity.getLocation().clone();
                                 strikeLoc.getWorld().strikeLightningEffect(strikeLoc);
+                                recordAbilityDamage(player, (LivingEntity) entity, 15000L);
                                 ((LivingEntity) entity).damage(damage, player);
 
                                 ((LivingEntity) entity).addPotionEffect(new PotionEffect(

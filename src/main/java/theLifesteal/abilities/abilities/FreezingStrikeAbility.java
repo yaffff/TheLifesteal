@@ -70,6 +70,7 @@ public class FreezingStrikeAbility extends ItemAbility {
         int slownessAmplifier = data.getConfigInt("slownessAmplifier");
         int duration = data.getConfigInt("duration");
 
+        recordAbilityDamage(attacker, victim, (duration * 1000L) + 10000L);
         victim.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, duration * 20, slownessAmplifier, false, true, true));
         victim.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, duration * 20, 1, false, true, true));
 

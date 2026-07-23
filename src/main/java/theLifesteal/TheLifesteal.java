@@ -181,6 +181,7 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         abilityManager.registerAbility(new BloodBoltsAbility(this));
         abilityManager.registerAbility(new IceStormAbility(this));
         abilityManager.registerAbility(new LifeConsumeAbility(this));
+        abilityManager.registerAbility(new MeteorStrikeAbility(this));
         getLogger().info("§a✓ Registered " + abilityManager.getAllAbilities().size() + " abilities");
     }
 

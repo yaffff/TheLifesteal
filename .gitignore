@@ -1,2 +1,4 @@
 # Project exclude paths
 /target/
+/tools/
+/final_ysf_mod/

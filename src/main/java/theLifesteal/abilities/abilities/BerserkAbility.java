@@ -77,7 +77,8 @@ public class BerserkAbility extends ItemAbility {
         if (bonusDamage > 0) {
             UUID victimId = victim.getUniqueId();
             ignoreDamage.add(victimId);
-            victim.damage(bonusDamage);
+            recordAbilityDamage(attacker, victim);
+            victim.damage(bonusDamage, attacker);
             Bukkit.getScheduler().runTaskLater(getPlugin(), () -> ignoreDamage.remove(victimId), 2L);
 
             double intensity = Math.min(1.0, missingHP / maxHP);

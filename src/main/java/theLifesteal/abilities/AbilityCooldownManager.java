@@ -17,57 +17,72 @@ public class AbilityCooldownManager {
 
     /**
      * Check if a player is on cooldown for an ability.
+     * Shared across ALL items with the same abilityId for that player.
+     *
      * @param playerId The player's UUID
-     * @param abilityId The ability ID (e.g., "healing")
-     * @param itemId The custom item ID (e.g., "life_shard")
-     * @param scope "ABILITY" = shared across all items, "ITEM" = per-item
+     * @param abilityId The ability ID (e.g., "healing", "meteor_strike")
+     * @param itemId The custom item ID (e.g., "healing_staff_1")
+     * @param scope Cooldown scope parameter (retained for API compatibility)
      */
     public boolean isOnCooldown(UUID playerId, String abilityId, String itemId, String scope) {
-        String key = buildKey(abilityId, itemId, scope);
         Map<String, Long> playerCooldowns = cooldowns.get(playerId);
         if (playerCooldowns == null) return false;
 
-        Long expiry = playerCooldowns.get(key);
-        if (expiry == null) return false;
+        long now = System.currentTimeMillis();
 
-        return System.currentTimeMillis() < expiry;
+        // 1. Check shared ability-wide cooldown key (shared across all items with same abilityId)
+        Long abilityExpiry = playerCooldowns.get(abilityId);
+        if (abilityExpiry != null && now < abilityExpiry) {
+            return true;
+        }
+
+        // 2. Check item-specific cooldown key as fallback
+        String itemKey = abilityId + ":" + itemId;
+        Long itemExpiry = playerCooldowns.get(itemKey);
+        return itemExpiry != null && now < itemExpiry;
     }
 
     /**
-     * Get remaining cooldown time in milliseconds.
+     * Get remaining cooldown time in milliseconds across shared ability key and item key.
      */
     public long getRemainingCooldown(UUID playerId, String abilityId, String itemId, String scope) {
-        String key = buildKey(abilityId, itemId, scope);
         Map<String, Long> playerCooldowns = cooldowns.get(playerId);
         if (playerCooldowns == null) return 0;
 
-        Long expiry = playerCooldowns.get(key);
-        if (expiry == null) return 0;
+        long now = System.currentTimeMillis();
+        long remaining = 0;
 
-        long remaining = expiry - System.currentTimeMillis();
-        return Math.max(0, remaining);
+        Long abilityExpiry = playerCooldowns.get(abilityId);
+        if (abilityExpiry != null && now < abilityExpiry) {
+            remaining = Math.max(remaining, abilityExpiry - now);
+        }
+
+        String itemKey = abilityId + ":" + itemId;
+        Long itemExpiry = playerCooldowns.get(itemKey);
+        if (itemExpiry != null && now < itemExpiry) {
+            remaining = Math.max(remaining, itemExpiry - now);
+        }
+
+        return remaining;
     }
 
     /**
      * Set a cooldown for an ability.
-     * @param cooldownSeconds Duration in seconds
+     * Sets the shared ability key so ALL items with this ability ID share the cooldown.
+     *
+     * @param cooldownSeconds Duration in seconds of the item used first
      */
     public void setCooldown(UUID playerId, String abilityId, String itemId, String scope, long cooldownSeconds) {
-        String key = buildKey(abilityId, itemId, scope);
         Map<String, Long> playerCooldowns = cooldowns.computeIfAbsent(playerId, k -> new HashMap<>());
-        playerCooldowns.put(key, System.currentTimeMillis() + (cooldownSeconds * 1000));
-    }
+        long expiry = System.currentTimeMillis() + (cooldownSeconds * 1000);
 
-    /**
-     * Build the cooldown key based on scope.
-     * ABILITY scope: key = abilityId (shared across all items with this ability)
-     * ITEM scope: key = abilityId:itemId (separate per item, default)
-     */
-    private String buildKey(String abilityId, String itemId, String scope) {
-        if ("ABILITY".equalsIgnoreCase(scope)) {
-            return abilityId;
+        // Always set the global abilityId key for the player
+        playerCooldowns.put(abilityId, expiry);
+
+        // Also set item key for reference
+        if (itemId != null && !itemId.isEmpty()) {
+            playerCooldowns.put(abilityId + ":" + itemId, expiry);
         }
-        return abilityId + ":" + itemId;
     }
 
     /**

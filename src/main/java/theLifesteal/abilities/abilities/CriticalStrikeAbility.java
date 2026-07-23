@@ -124,6 +124,7 @@ public class CriticalStrikeAbility extends ItemAbility {
             processingDamage.add(victim.getUniqueId());
 
             double bonusDamage = baseDamage * (multiplier - 1.0);
+            recordAbilityDamage(attacker, victim);
             victim.damage(bonusDamage, attacker);
 
             victim.getWorld().spawnParticle(Particle.ENCHANTED_HIT,

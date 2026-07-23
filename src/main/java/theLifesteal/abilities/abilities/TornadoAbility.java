@@ -154,6 +154,7 @@ public class TornadoAbility extends ItemAbility {
                     double dist = entityLoc.distance(center.clone());
 
                     if (dist <= currentRadius) {
+                        recordAbilityDamage(player, target, 15000L);
                         Vector toCenter = center.toVector().subtract(entityLoc.toVector());
                         toCenter.setY(0);
                         if (toCenter.length() > 0.3) {

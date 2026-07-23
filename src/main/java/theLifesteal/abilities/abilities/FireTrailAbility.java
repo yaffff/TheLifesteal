@@ -130,6 +130,7 @@ public class FireTrailAbility extends ItemAbility {
                         LivingEntity target = (LivingEntity) entity;
                         double dist = target.getLocation().distance(playerLoc);
                         if (dist <= damageRadius) {
+                            recordAbilityDamage(player, target, (fireTicks * 50L) + 10000L);
                             target.removePotionEffect(PotionEffectType.FIRE_RESISTANCE);
                             target.setFireTicks(fireTicks);
                             target.getWorld().spawnParticle(Particle.FLAME,

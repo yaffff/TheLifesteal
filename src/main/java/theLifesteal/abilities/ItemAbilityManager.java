@@ -11,12 +11,18 @@ public class ItemAbilityManager {
 
     private final JavaPlugin plugin;
     private final AbilityCooldownManager cooldownManager;
+    private final AbilityKillTracker killTracker;
     private final Map<String, ItemAbility> registeredAbilities;
 
     public ItemAbilityManager(JavaPlugin plugin) {
         this.plugin = plugin;
         this.cooldownManager = new AbilityCooldownManager();
+        this.killTracker = new AbilityKillTracker(plugin);
         this.registeredAbilities = new LinkedHashMap<>();
+    }
+
+    public AbilityKillTracker getKillTracker() {
+        return killTracker;
     }
 
     public void registerAbility(ItemAbility ability) {

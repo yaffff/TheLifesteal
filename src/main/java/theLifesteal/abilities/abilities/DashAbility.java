@@ -91,6 +91,7 @@ public class DashAbility extends ItemAbility {
                         Vector toEntity = entity.getLocation().toVector().subtract(start.toVector()).normalize();
                         double dot = toEntity.dot(dir);
                         if (dot > 0.7) {
+                            recordAbilityDamage(player, (LivingEntity) entity);
                             ((LivingEntity) entity).damage(damage, player);
                             entity.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR,
                                     entity.getLocation().add(0, 1, 0), 5, 0.3, 0.3, 0.3, 0.1);

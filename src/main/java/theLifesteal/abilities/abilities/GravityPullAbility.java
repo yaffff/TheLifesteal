@@ -95,6 +95,7 @@ public class GravityPullAbility extends ItemAbility {
             Vector velocity = pullDir.multiply(pullForce);
             velocity.setY(velocity.getY() + 0.4);
 
+            recordAbilityDamage(player, (LivingEntity) entity, 15000L);
             entity.setVelocity(velocity);
 
             for (int i = 0; i < 15; i++) {

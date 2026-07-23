@@ -178,6 +178,7 @@ public class BloodBoltsAbility extends ItemAbility {
                 for (Entity entity : current.getWorld().getNearbyEntities(current, 0.6, 0.6, 0.6)) {
                     if (!(entity instanceof LivingEntity) || entity == player) continue;
                     LivingEntity target = (LivingEntity) entity;
+                    recordAbilityDamage(player, target);
                     target.damage(damage, player);
 
                     for (int i = 0; i < 10; i++) {

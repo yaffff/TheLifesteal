@@ -193,6 +193,7 @@ public class StoneSpikesAbility extends ItemAbility {
                             hitEntities.add(entity);
                             LivingEntity target = (LivingEntity) entity;
 
+                            recordAbilityDamage(player, target, 15000L);
                             target.damage(damage, player);
                             Vector launchVec = new Vector(0, launchPower, 0);
                             target.setVelocity(target.getVelocity().add(launchVec));

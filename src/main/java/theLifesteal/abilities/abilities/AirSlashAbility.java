@@ -130,6 +130,7 @@ public class AirSlashAbility extends ItemAbility {
 
                         if (distAlong >= -1 && distAlong <= 1 && perpDist.length() <= arcWidth + 0.5) {
                             hitEntities.add(entity);
+                            recordAbilityDamage(player, (LivingEntity) entity);
                             ((LivingEntity) entity).damage(damage, player);
 
                             entity.getWorld().spawnParticle(Particle.SWEEP_ATTACK,
