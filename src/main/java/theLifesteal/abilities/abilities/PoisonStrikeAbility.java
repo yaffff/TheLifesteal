@@ -130,8 +130,7 @@ public class PoisonStrikeAbility extends ItemAbility {
 
                 if (ticks % 10 == 0 && ticks > 0) {
                     processingDamage.add(victimId);
-                    recordAbilityDamage(attacker, victim, (duration * 1000L) + 10000L);
-                    victim.damage(damagePerTick, attacker);
+                    dealAbilityDamage(attacker, victim, damagePerTick, (duration * 1000L) + 10000L);
                     Bukkit.getScheduler().runTaskLater(getPlugin(), () -> processingDamage.remove(victimId), 1L);
                     damageTicks++;
 

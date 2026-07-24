@@ -79,6 +79,16 @@ public class ExplosiveChargeAbility extends ItemAbility implements Listener {
     }
 
     @Override
+    public double getRequiredHpCost(ItemAbilityData data, Player player) {
+        if (data == null || player == null) return 0.0;
+        if (data.getConfigBoolean("selfDamage")) {
+            double maxDamage = data.getConfigDouble("maxDamage");
+            return maxDamage * 0.3;
+        }
+        return 0.0;
+    }
+
+    @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
         String scope = data.getConfigString("cooldownScope");
@@ -100,6 +110,13 @@ public class ExplosiveChargeAbility extends ItemAbility implements Listener {
         double knockbackPower = data.getConfigDouble("knockbackPower");
         int blindnessDuration = data.getConfigInt("blindnessDuration");
         boolean selfDamage = data.getConfigBoolean("selfDamage");
+
+        if (selfDamage) {
+            double selfCost = maxDamage * 0.3;
+            if (!checkStrictHealthRequirement(player, selfCost)) {
+                return false;
+            }
+        }
 
         int totalTicks = chargeTime * 20;
 
@@ -306,8 +323,7 @@ public class ExplosiveChargeAbility extends ItemAbility implements Listener {
             double dist = target.getLocation().distance(center);
             if (dist <= radius) {
                 double damageMod = 1.0 - (dist / radius);
-                recordAbilityDamage(player, target);
-                target.damage(damage * damageMod, player);
+                dealAbilityDamage(player, target, damage * damageMod);
 
                 Vector dir = target.getLocation().toVector().subtract(center.toVector()).normalize();
                 dir.setY(0.5);
@@ -321,7 +337,10 @@ public class ExplosiveChargeAbility extends ItemAbility implements Listener {
         }
 
         if (selfDamage) {
-            player.damage(damage * 0.3);
+            double selfCost = damage * 0.3;
+            if (checkStrictHealthRequirement(player, selfCost)) {
+                applySelfHealthCost(player, selfCost);
+            }
         }
 
         // OPTIMIZED: 5 smoke every 3 ticks for 30 ticks (was 10 every 2 ticks for 40)

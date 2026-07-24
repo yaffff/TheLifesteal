@@ -6,6 +6,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.ItemStack;
+import theLifesteal.abilities.AbilityKillTracker;
+import theLifesteal.abilities.ItemAbility;
 
 public class DeathListener implements Listener {
 
@@ -23,14 +25,25 @@ public class DeathListener implements Listener {
     public void onPlayerDeath(PlayerDeathEvent event) {
         Player victim = event.getEntity();
         Player killer = victim.getKiller();
+        String usedAbilityName = null;
 
-        // If Bukkit killer is null, check if victim was recently damaged/affected by an ability
-        if (killer == null && plugin.getAbilityManager() != null) {
-            var killTracker = plugin.getAbilityManager().getKillTracker();
+        if (plugin.getAbilityManager() != null) {
+            AbilityKillTracker killTracker = plugin.getAbilityManager().getKillTracker();
             if (killTracker != null) {
-                killer = killTracker.getCasterForVictim(victim.getUniqueId());
-                if (killer != null) {
-                    victim.setKiller(killer);
+                AbilityKillTracker.AbilityAttribution attribution = killTracker.getAttributionForVictim(victim.getUniqueId());
+                if (attribution != null) {
+                    Player trackedCaster = Bukkit.getPlayer(attribution.getCasterId());
+                    if (trackedCaster != null && trackedCaster.isOnline()) {
+                        if (killer == null) {
+                            killer = trackedCaster;
+                            victim.setKiller(killer);
+                        }
+                        String abilityId = attribution.getAbilityId();
+                        if (abilityId != null && !abilityId.equalsIgnoreCase("pvp_damage")) {
+                            ItemAbility ability = plugin.getAbilityManager().getAbility(abilityId);
+                            usedAbilityName = ability != null ? ability.getDisplayName() : abilityId;
+                        }
+                    }
                 }
             }
         }
@@ -42,9 +55,14 @@ public class DeathListener implements Listener {
 
             // Broadcast lifesteal message
             if (configManager.getConfig().getBoolean("settings.broadcast-lifesteal", true)) {
-                String message = configManager.getMessage("lifesteal-broadcast")
-                        .replace("%killer%", killer.getName())
-                        .replace("%victim%", victim.getName());
+                String message;
+                if (usedAbilityName != null) {
+                    message = ColorUtils.colorize("&c☠ &e" + victim.getName() + " &7was slain by &c" + killer.getName() + " &7using &b" + usedAbilityName + "&7!");
+                } else {
+                    message = configManager.getMessage("lifesteal-broadcast")
+                            .replace("%killer%", killer.getName())
+                            .replace("%victim%", victim.getName());
+                }
                 Bukkit.broadcastMessage(message);
             }
         }

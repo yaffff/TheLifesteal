@@ -88,8 +88,8 @@ public class BloodBoltsAbility extends ItemAbility {
         double selfDamage = data.getConfigDouble("selfDamage");
 
         if (selfDamage > 0) {
-            double newHealth = Math.max(1.0, player.getHealth() - selfDamage);
-            player.setHealth(newHealth);
+            if (!checkStrictHealthRequirement(player, selfDamage)) return false;
+            applySelfHealthCost(player, selfDamage);
         }
 
         for (int i = 0; i < 20; i++) {
@@ -178,8 +178,7 @@ public class BloodBoltsAbility extends ItemAbility {
                 for (Entity entity : current.getWorld().getNearbyEntities(current, 0.6, 0.6, 0.6)) {
                     if (!(entity instanceof LivingEntity) || entity == player) continue;
                     LivingEntity target = (LivingEntity) entity;
-                    recordAbilityDamage(player, target);
-                    target.damage(damage, player);
+                    dealAbilityDamage(player, target, damage);
 
                     for (int i = 0; i < 10; i++) {
                         target.getWorld().spawnParticle(Particle.DUST,

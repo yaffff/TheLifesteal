@@ -65,6 +65,21 @@ public class AbilityKillTracker implements Listener {
     }
 
     /**
+     * Retrieve the active attribution object for a victim, if still valid.
+     */
+    public AbilityAttribution getAttributionForVictim(UUID victimId) {
+        if (victimId == null) return null;
+        AbilityAttribution attribution = victimAttributions.get(victimId);
+        if (attribution == null) return null;
+
+        if (attribution.isExpired()) {
+            victimAttributions.remove(victimId);
+            return null;
+        }
+        return attribution;
+    }
+
+    /**
      * Clear victim tracking data.
      */
     public void clearVictim(UUID victimId) {

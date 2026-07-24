@@ -242,8 +242,7 @@ public class PoisonDaggerAbility extends ItemAbility {
 
                 if (ticks % 10 == 0 && ticks > 0) {
                     ignoreDamage.add(victimId);
-                    recordAbilityDamage(attacker, victim, (duration * 1000L) + 10000L);
-                    victim.damage(damagePerTick, attacker);
+                    dealAbilityDamage(attacker, victim, damagePerTick, (duration * 1000L) + 10000L);
                     Bukkit.getScheduler().runTaskLater(getPlugin(), () -> ignoreDamage.remove(victimId), 1L);
                     damageTicks++;
 

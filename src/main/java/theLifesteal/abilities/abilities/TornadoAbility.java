@@ -180,7 +180,7 @@ public class TornadoAbility extends ItemAbility {
                         UUID entityId = entity.getUniqueId();
                         if (!hitEntities.contains(entityId)) {
                             hitEntities.add(entityId);
-                            target.damage(damage, player);
+                            dealAbilityDamage(player, target, damage);
                         }
                     }
                 }

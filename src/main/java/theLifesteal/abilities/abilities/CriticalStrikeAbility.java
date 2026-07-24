@@ -73,7 +73,8 @@ public class CriticalStrikeAbility extends ItemAbility {
 
     @Override
     public boolean onHitExecute(Player attacker, LivingEntity victim, ItemAbilityData data,
-                                AbilityCooldownManager cooldownManager, String itemId, double baseDamage) {
+                                AbilityCooldownManager cooldownManager, String itemId, double baseDamage,
+                                org.bukkit.event.entity.EntityDamageByEntityEvent event) {
         // Prevent recursive infinite damage loop
         if (processingDamage.contains(victim.getUniqueId())) return false;
 
@@ -125,7 +126,11 @@ public class CriticalStrikeAbility extends ItemAbility {
 
             double bonusDamage = baseDamage * (multiplier - 1.0);
             recordAbilityDamage(attacker, victim);
-            victim.damage(bonusDamage, attacker);
+            if (event != null) {
+                event.setDamage(event.getDamage() + bonusDamage);
+            } else {
+                dealAbilityDamage(attacker, victim, bonusDamage);
+            }
 
             victim.getWorld().spawnParticle(Particle.ENCHANTED_HIT,
                     victim.getLocation().add(0, 1.5, 0), 25, 0.4, 0.8, 0.4, 0.1);

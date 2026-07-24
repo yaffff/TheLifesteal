@@ -47,6 +47,7 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
     private ItemAbilityManager abilityManager;
     private ItemAbilityGUI abilityGUI;
     private ItemAbilityListener abilityListener;
+    private TotemProtectionManager totemProtectionManager;
 
     @Override
     public void onEnable() {
@@ -95,6 +96,9 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         // Initialize potion effect listener
         this.customItemEffectListener = new CustomItemEffectListener(this, advancedItemManager);
         getServer().getPluginManager().registerEvents(customItemEffectListener, this);
+
+        // Initialize totem protection manager
+        this.totemProtectionManager = new TotemProtectionManager(this);
 
         // Initialize ability listener
         this.abilityListener = new ItemAbilityListener(this, abilityManager, advancedItemManager);
@@ -182,6 +186,12 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         abilityManager.registerAbility(new IceStormAbility(this));
         abilityManager.registerAbility(new LifeConsumeAbility(this));
         abilityManager.registerAbility(new MeteorStrikeAbility(this));
+        abilityManager.registerAbility(new PhoenixAbility(this));
+        abilityManager.registerAbility(new PlasmaBlastAbility(this));
+        abilityManager.registerAbility(new PierceArmorAbility(this));
+        abilityManager.registerAbility(new MirageAbility(this));
+        abilityManager.registerAbility(new ReaperAbility(this));
+        abilityManager.registerAbility(new CelestialHomingShotAbility(this));
         getLogger().info("§a✓ Registered " + abilityManager.getAllAbilities().size() + " abilities");
     }
 
@@ -241,14 +251,14 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
         if (customEnchantGUI != null) {
             customEnchantGUI.cleanupPlayer(uuid);
         }
-        if (abilityManager != null) {
-            abilityManager.clearPlayer(uuid);
+        if (abilityManager != null && abilityManager.getCooldownManager() != null) {
+            abilityManager.getCooldownManager().cleanupExpired(uuid);
         }
         if (abilityManager.getAbility("explosive_charge") instanceof ExplosiveChargeAbility exp) {
             exp.cleanupPlayer(uuid);
         }
-        if (abilityManager.getAbility("blood_bolts") instanceof BloodBoltsAbility bb) {
-            bb.cleanupPlayer(uuid);
+        if (totemProtectionManager != null) {
+            totemProtectionManager.clearPlayer(uuid);
         }
     }
 
@@ -256,6 +266,7 @@ public final class TheLifesteal extends JavaPlugin implements Listener {
     public CustomItemGUI getCustomItemGUI() { return customItemGUI; }
     public ItemAbilityManager getAbilityManager() { return abilityManager; }
     public ItemAbilityGUI getAbilityGUI() { return abilityGUI; }
+    public TotemProtectionManager getTotemProtectionManager() { return totemProtectionManager; }
 
     @Override
     public void onDisable() {

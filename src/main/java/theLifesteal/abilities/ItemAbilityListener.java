@@ -20,7 +20,10 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import theLifesteal.ColorUtils;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.entity.EntityResurrectEvent;
 import theLifesteal.abilities.abilities.CriticalStrikeAbility;
+import theLifesteal.abilities.abilities.PhoenixAbility;
 import theLifesteal.customitem.AdvancedCustomItem;
 import theLifesteal.customitem.AdvancedCustomItemManager;
 import theLifesteal.customitem.CustomItemFlag;
@@ -121,18 +124,34 @@ public class ItemAbilityListener implements Listener {
         if (customItem == null) return;
 
         Map<ItemAbilityType, List<ItemAbilityData>> abilities = customItem.getAbilities();
-        List<ItemAbilityData> onHitAbilities = abilities.get(ItemAbilityType.ON_HIT);
-        if (onHitAbilities == null || onHitAbilities.isEmpty()) return;
+        java.util.List<ItemAbilityData> attackAbilities = new java.util.ArrayList<>();
+        if (abilities.get(ItemAbilityType.ON_HIT) != null) attackAbilities.addAll(abilities.get(ItemAbilityType.ON_HIT));
+        if (abilities.get(ItemAbilityType.PASSIVE) != null) attackAbilities.addAll(abilities.get(ItemAbilityType.PASSIVE));
+        if (attackAbilities.isEmpty()) return;
 
         boolean isFullAttack = attacker.getAttackCooldown() >= 0.99f;
         boolean isCritical = isFullAttack && attacker.getFallDistance() > 0.0f && !attacker.isOnGround();
         boolean isPlayer = victim instanceof Player;
+
+        if (isPlayer && plugin instanceof theLifesteal.TheLifesteal lifesteal) {
+            TotemProtectionManager totemMgr = lifesteal.getTotemProtectionManager();
+            if (totemMgr != null) {
+                Player victimPlayer = (Player) victim;
+                if (totemMgr.isTotemProtected(victimPlayer)) {
+                    return;
+                }
+                if (totemMgr.hasTotem(victimPlayer) && (victimPlayer.getHealth() - event.getFinalDamage() <= 0)) {
+                    return;
+                }
+            }
+        }
+
         boolean isPassive = victim instanceof Animals || victim instanceof WaterMob || victim instanceof Ambient;
         boolean isHostile = victim instanceof Monster;
 
         boolean anyTriggered = false;
 
-        for (ItemAbilityData data : onHitAbilities) {
+        for (ItemAbilityData data : attackAbilities) {
             String triggerOn = data.getConfigString("trigger_on");
             if (triggerOn == null || triggerOn.isEmpty()) triggerOn = "ALL";
 
@@ -153,7 +172,7 @@ public class ItemAbilityListener implements Listener {
             ItemAbility ability = abilityManager.getAbility(data.getAbilityId());
             if (ability != null) {
                 boolean triggered = ability.onHitExecute(attacker, victim, data,
-                        abilityManager.getCooldownManager(), customItem.getId(), event.getDamage());
+                        abilityManager.getCooldownManager(), customItem.getId(), event.getDamage(), event);
                 if (triggered) {
                     anyTriggered = true;
                 }
@@ -189,9 +208,51 @@ public class ItemAbilityListener implements Listener {
         player.sendMessage(ColorUtils.colorize("&7✦ Item consumed!"));
     }
 
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onEntityResurrect(EntityResurrectEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+
+        ItemStack[] equippedItems = getEquippedItems(player);
+
+        for (ItemStack item : equippedItems) {
+            if (item == null || item.getType().isAir()) continue;
+            AdvancedCustomItem customItem = customItemManager.getItemByStack(item);
+            if (customItem == null) continue;
+
+            Map<ItemAbilityType, List<ItemAbilityData>> abilities = customItem.getAbilities();
+            List<ItemAbilityData> passiveAbilities = abilities.get(ItemAbilityType.PASSIVE);
+            if (passiveAbilities == null) continue;
+
+            for (ItemAbilityData data : passiveAbilities) {
+                if (data.getAbilityId().equalsIgnoreCase("phoenix")) {
+                    ItemAbility ability = abilityManager.getAbility("phoenix");
+                    if (ability instanceof PhoenixAbility phoenix) {
+                        boolean revived = phoenix.triggerPhoenix(player, item, data, abilityManager.getCooldownManager(), customItem.getId());
+                        if (revived) {
+                            event.setCancelled(false);
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    private ItemStack[] getEquippedItems(Player player) {
+        ItemStack[] armor = player.getInventory().getArmorContents();
+        ItemStack mainHand = player.getInventory().getItemInMainHand();
+        ItemStack offHand = player.getInventory().getItemInOffHand();
+
+        ItemStack[] items = new ItemStack[armor.length + 2];
+        items[0] = mainHand;
+        items[1] = offHand;
+        System.arraycopy(armor, 0, items, 2, armor.length);
+        return items;
+    }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        abilityManager.clearPlayer(event.getPlayer().getUniqueId());
+        abilityManager.getCooldownManager().cleanupExpired(event.getPlayer().getUniqueId());
         CriticalStrikeAbility critAbility = getCriticalStrikeAbility();
         if (critAbility != null) {
             critAbility.removeBossBar(event.getPlayer());

@@ -86,6 +86,20 @@ public class AbilityCooldownManager {
     }
 
     /**
+     * Clear expired cooldowns for a player while retaining active cooldowns.
+     */
+    public void cleanupExpired(UUID playerId) {
+        Map<String, Long> playerCooldowns = cooldowns.get(playerId);
+        if (playerCooldowns != null) {
+            long now = System.currentTimeMillis();
+            playerCooldowns.entrySet().removeIf(entry -> now >= entry.getValue());
+            if (playerCooldowns.isEmpty()) {
+                cooldowns.remove(playerId);
+            }
+        }
+    }
+
+    /**
      * Clear all cooldowns for a player.
      */
     public void clearPlayer(UUID playerId) {

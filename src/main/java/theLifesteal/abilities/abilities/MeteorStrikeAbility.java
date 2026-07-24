@@ -85,24 +85,24 @@ public class MeteorStrikeAbility extends ItemAbility {
             return false;
         }
 
-        // HP Cost Check: 80% of current max health
+        // HP Cost Check: % of current max health
         int hpCostPercent = data.getConfigInt("hpCostPercent");
         if (hpCostPercent <= 0) hpCostPercent = 80;
 
-        double maxHealth = player.getAttribute(Attribute.MAX_HEALTH) != null
-                ? player.getAttribute(Attribute.MAX_HEALTH).getValue()
-                : player.getMaxHealth();
+        double hpCost = getRequiredHpCost(data, player);
+        if (hpCost <= 0) {
+            double maxHealth = player.getAttribute(Attribute.MAX_HEALTH) != null
+                    ? player.getAttribute(Attribute.MAX_HEALTH).getValue()
+                    : player.getMaxHealth();
+            hpCost = maxHealth * (hpCostPercent / 100.0);
+        }
 
-        double hpCost = maxHealth * (hpCostPercent / 100.0);
-        double currentHp = player.getHealth();
-
-        if (currentHp <= hpCost) {
-            player.sendMessage(ColorUtils.colorize("&cYou don't have enough HP to cast Meteor Strike! &7(Requires " + (int) hpCost + "❤ / " + hpCostPercent + "% Max HP)"));
+        if (!checkStrictHealthRequirement(player, hpCost)) {
             return false;
         }
 
         // Deduct 80% Max HP cost
-        player.setHealth(currentHp - hpCost);
+        applySelfHealthCost(player, hpCost);
         player.sendMessage(ColorUtils.colorize("&cSacrificed &4" + (int) hpCost + "❤ &c(" + hpCostPercent + "% Max HP) to trigger &c&lMeteor Strike!"));
 
         int range = data.getConfigInt("range");
@@ -290,8 +290,7 @@ public class MeteorStrikeAbility extends ItemAbility {
 
                 double dist = entity.getLocation().distance(impactLoc);
                 if (dist <= radius) {
-                    recordAbilityDamage(player, living, (fireDuration * 1000L) + 15000L);
-                    living.damage(damage, player);
+                    dealAbilityDamage(player, living, damage, (fireDuration * 1000L) + 15000L);
 
                     // Set target players / entities on fire
                     if (fireDuration > 0) {

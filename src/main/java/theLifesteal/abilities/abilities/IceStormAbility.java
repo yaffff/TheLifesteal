@@ -70,6 +70,15 @@ public class IceStormAbility extends ItemAbility {
     }
 
     @Override
+    public double getRequiredHpCost(ItemAbilityData data, Player player) {
+        if (player == null) return 0.0;
+        double maxHP = player.getAttribute(Attribute.MAX_HEALTH) != null 
+                ? player.getAttribute(Attribute.MAX_HEALTH).getValue() 
+                : 20.0;
+        return maxHP * 0.5;
+    }
+
+    @Override
     public boolean execute(Player player, ItemAbilityData data, AbilityCooldownManager cooldownManager, String itemId) {
         int cooldown = data.getConfigInt("cooldown");
         String scope = data.getConfigString("cooldownScope");
@@ -81,16 +90,13 @@ public class IceStormAbility extends ItemAbility {
             return false;
         }
 
-        double maxHP = player.getAttribute(Attribute.MAX_HEALTH).getValue();
-        double currentHP = player.getHealth();
-        double cost = maxHP * 0.5;
+        double cost = getRequiredHpCost(data, player);
 
-        if (currentHP <= cost) {
-            player.sendMessage(ColorUtils.colorize("&cNot enough HP! Need at least " + String.format("%.1f", cost) + " HP."));
+        if (!checkStrictHealthRequirement(player, cost)) {
             return false;
         }
 
-        player.setHealth(currentHP - cost);
+        applySelfHealthCost(player, cost);
 
         int radius = data.getConfigInt("radius");
         int duration = data.getConfigInt("duration");

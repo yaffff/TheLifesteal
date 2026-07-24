@@ -104,6 +104,11 @@ public class ItemAbilityManager {
         ItemAbility ability = getAbility(data.getAbilityId());
         if (ability == null) return false;
 
+        double hpCost = ability.getRequiredHpCost(data, player);
+        if (hpCost > 0 && !ability.checkStrictHealthRequirement(player, hpCost)) {
+            return false;
+        }
+
         return ability.execute(player, data, cooldownManager, itemId);
     }
 
@@ -118,6 +123,11 @@ public class ItemAbilityManager {
         ItemAbilityData data = abilities.get(0);
         ItemAbility ability = getAbility(data.getAbilityId());
         if (ability == null) return false;
+
+        double hpCost = ability.getRequiredHpCost(data, player);
+        if (hpCost > 0 && !ability.checkStrictHealthRequirement(player, hpCost)) {
+            return false;
+        }
 
         return ability.execute(player, data, cooldownManager, itemId);
     }
@@ -134,6 +144,11 @@ public class ItemAbilityManager {
         for (ItemAbilityData data : abilities) {
             ItemAbility ability = getAbility(data.getAbilityId());
             if (ability == null) continue;
+
+            double hpCost = ability.getRequiredHpCost(data, attacker);
+            if (hpCost > 0 && !ability.checkStrictHealthRequirement(attacker, hpCost)) {
+                continue;
+            }
 
             ability.onHitExecute(attacker, victim, data, cooldownManager, itemId, baseDamage);
         }

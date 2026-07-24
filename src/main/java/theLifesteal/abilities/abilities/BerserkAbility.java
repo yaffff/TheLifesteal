@@ -59,7 +59,8 @@ public class BerserkAbility extends ItemAbility {
 
     @Override
     public boolean onHitExecute(Player attacker, LivingEntity victim, ItemAbilityData data,
-                                AbilityCooldownManager cooldownManager, String itemId, double baseDamage) {
+                                AbilityCooldownManager cooldownManager, String itemId, double baseDamage,
+                                org.bukkit.event.entity.EntityDamageByEntityEvent event) {
         // Prevent recursive damage
         if (ignoreDamage.contains(victim.getUniqueId())) return false;
         if (victim instanceof Player && !data.getConfigBoolean("affectPlayers")) return false;
@@ -75,11 +76,12 @@ public class BerserkAbility extends ItemAbility {
         double bonusDamage = Math.min(missingHP * damagePerMissingHP, maxBonusDamage);
 
         if (bonusDamage > 0) {
-            UUID victimId = victim.getUniqueId();
-            ignoreDamage.add(victimId);
             recordAbilityDamage(attacker, victim);
-            victim.damage(bonusDamage, attacker);
-            Bukkit.getScheduler().runTaskLater(getPlugin(), () -> ignoreDamage.remove(victimId), 2L);
+            if (event != null) {
+                event.setDamage(event.getDamage() + bonusDamage);
+            } else {
+                dealAbilityDamage(attacker, victim, bonusDamage);
+            }
 
             double intensity = Math.min(1.0, missingHP / maxHP);
             victim.getWorld().spawnParticle(Particle.DUST,
